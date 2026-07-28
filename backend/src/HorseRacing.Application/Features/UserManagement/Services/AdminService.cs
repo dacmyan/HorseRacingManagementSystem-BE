@@ -150,4 +150,35 @@ public class AdminService : IAdminService
             CreatedAt = u.CreatedAt
         });
     }
+
+    public async Task<AppUser> UpdateUserStatusAsync(int id, int currentAdminId)
+    {
+        var user = await _userRepository.GetByIdAsync(id);
+        if (user == null)
+        {
+            throw new KeyNotFoundException($"User with ID {id} was not found.");
+        }
+
+        if (id == currentAdminId && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Administrators cannot deactivate their own account.");
+
+        var isAdmin = user.Role?.Name == "Admin";
+        if (isAdmin && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            var activeAdminCount = await _userRepository.GetActiveAdminCountAsync();
+            if (activeAdminCount <= 1)
+                throw new InvalidOperationException("The last active administrator cannot be deactivated.");
+        }
+
+        if (user.Role?.Name == "Jockey" && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            if (await _userRepository.HasUpcomingJockeyAssignmentsAsync(id))
+                throw new InvalidOperationException("Cannot lock this Jockey because they have upcoming races. Please reassign their active contracts to another Jockey (Late Jockey Change) or scratch the horse before locking.");
+        }
+
+        user.Status = string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase) ? "Inactive" : "Active";
+        await _userRepository.SaveChangesAsync();
+
+        return user;
+    }
 }

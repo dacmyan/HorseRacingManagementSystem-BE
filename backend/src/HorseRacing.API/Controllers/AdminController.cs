@@ -1089,31 +1089,21 @@ public class AdminController : ControllerBase
     }
 
     [HttpPut("users/{id}/status")]
-    public async Task<IActionResult> UpdateUserStatus(int id, [FromServices] AppDbContext context)
+    public async Task<IActionResult> UpdateUserStatus(int id)
     {
         try
         {
-            var user = await context.Users.FindAsync(id);
-            if (user == null)
-            {
-                return NotFound(new { message = $"User with ID {id} was not found." });
-            }
-
             var currentAdminId = GetCurrentUserId();
-            if (id == currentAdminId && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(new { message = "Administrators cannot deactivate their own account." });
-            var isAdmin = await context.Entry(user).Reference(u => u.Role).Query().AnyAsync(r => r.Name == "Admin");
-            if (isAdmin && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
-            {
-                var activeAdminCount = await context.Users.CountAsync(u => u.Role != null && u.Role.Name == "Admin" && u.Status == "Active");
-                if (activeAdminCount <= 1)
-                    return BadRequest(new { message = "The last active administrator cannot be deactivated." });
-            }
-
-            user.Status = string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase) ? "Inactive" : "Active";
-            await context.SaveChangesAsync();
-
+            var user = await _adminService.UpdateUserStatusAsync(id, currentAdminId);
             return Ok(new { message = "User status updated successfully", result = user });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {

@@ -73,6 +73,24 @@ public class UserRepository : IUserRepository
 
     public async Task<AppUser?> GetByVerificationTokenAsync(string token)
     {
-        return await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.VerificationToken == token);
+        return await _context.Users.Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.VerificationToken == token);
+    }
+
+    public async Task<int> GetActiveAdminCountAsync()
+    {
+        return await _context.Users.CountAsync(u => u.Role != null && u.Role.Name == "Admin" && u.Status == "Active");
+    }
+
+    public async Task<bool> HasUpcomingJockeyAssignmentsAsync(int jockeyId)
+    {
+        return await _context.JockeyContracts.AnyAsync(c => 
+            c.JockeyId == jockeyId && 
+            c.Status == "Active" && 
+            c.Tournament != null && 
+            (c.Tournament.Status == "PendingRegistration" || 
+             c.Tournament.Status == "Pending" || 
+             c.Tournament.Status == "Scheduled" || 
+             c.Tournament.Status == "InProgress"));
     }
 }

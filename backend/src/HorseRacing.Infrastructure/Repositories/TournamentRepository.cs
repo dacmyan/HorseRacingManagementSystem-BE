@@ -67,6 +67,7 @@ public class TournamentRepository : ITournamentRepository
     {
         return await _context.Set<HorseRacing.Domain.Entities.Registration>()
             .Include(r => r.Horse)
+            .Include(r => r.MedicalCheckRecords)
             .Where(r => r.TournamentId == tournamentId && r.Status == "Approved")
             .OrderBy(r => r.RegistrationId)
             .ToListAsync();

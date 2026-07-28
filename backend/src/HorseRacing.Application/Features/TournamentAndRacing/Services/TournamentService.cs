@@ -276,11 +276,10 @@ public class TournamentService : ITournamentService
         // Remove registrations without an accepted/active jockey before counting.
         var cancelledRegistrations = await _tournamentRepository.CancelRegistrationsWithoutJockeyAsync(id);
         var approvedRegistrations = await _tournamentRepository.GetApprovedRegistrationsAsync(id);
-        var medicalChecks = await _tournamentRepository.GetMedicalCheckRecordsForTournamentAsync(id);
 
         var qualifiedCount = approvedRegistrations.Count(registration =>
-            medicalChecks.Any(check =>
-                check.RegistrationId == registration.RegistrationId &&
+            registration.MedicalCheckRecords != null &&
+            registration.MedicalCheckRecords.Any(check =>
                 (string.Equals(check.MedicalResult, "Pass", StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(check.MedicalResult, "Passed", StringComparison.OrdinalIgnoreCase)) &&
                 !string.Equals(check.DopingResult, "Positive", StringComparison.OrdinalIgnoreCase)));
@@ -1313,19 +1312,19 @@ public class TournamentService : ITournamentService
             // Giải mới B nằm sau giải hiện tại A
             if (startDate.Date >= t.StartDate.Value.Date)
             {
-                var minStartDate = t.EndDate.Value.Date.AddDays(2); // Cách ít nhất 1 ngày trống
+                var minStartDate = t.EndDate.Value.Date.AddDays(8); // Cách ít nhất 7 ngày trống
                 if (startDate.Date < minStartDate)
                 {
-                    throw new ArgumentException($"The racing period of the new tournament must be at least 1 day apart from the end date of tournament '{t.Name}' ({t.EndDate.Value:dd/MM/yyyy}) (can only start from {minStartDate:dd/MM/yyyy}).");
+                    throw new ArgumentException($"The gap between tournaments must be at least 7 days to allow for recovery and organization. The new tournament can only start from {minStartDate:dd/MM/yyyy}.");
                 }
             }
             // Giải mới B nằm trước giải hiện tại A
             else
             {
-                var maxEndDate = t.StartDate.Value.Date.AddDays(-2); // Cách ít nhất 1 ngày trống
+                var maxEndDate = t.StartDate.Value.Date.AddDays(-8); // Cách ít nhất 7 ngày trống
                 if (endDate.Date > maxEndDate)
                 {
-                    throw new ArgumentException($"The racing period of the new tournament must be at least 1 day apart from the start date of tournament '{t.Name}' ({t.StartDate.Value:dd/MM/yyyy}) (must end on or before {maxEndDate:dd/MM/yyyy}).");
+                    throw new ArgumentException($"The gap between tournaments must be at least 7 days to allow for recovery and organization. The new tournament must end on or before {maxEndDate:dd/MM/yyyy}.");
                 }
             }
         }
