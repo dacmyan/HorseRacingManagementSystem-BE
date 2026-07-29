@@ -151,7 +151,7 @@ public class AdminService : IAdminService
         });
     }
 
-    public async Task<AppUser> UpdateUserStatusAsync(int id, int currentAdminId)
+    public async Task<AppUser> UpdateUserStatusAsync(int id, int currentAdminId, bool forceLock = false)
     {
         var user = await _userRepository.GetByIdAsync(id);
         if (user == null)
@@ -172,25 +172,12 @@ public class AdminService : IAdminService
 
         if (string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
         {
-            if (user.Role?.Name == "Jockey")
+            var roleName = user.Role?.Name ?? "";
+            var blockers = await _userRepository.GetLockingConstraintsAsync(id, roleName);
+
+            if (blockers.Any() && !forceLock)
             {
-                if (await _userRepository.HasUpcomingJockeyAssignmentsAsync(id))
-                    throw new InvalidOperationException("Cannot lock this Jockey because they have upcoming races. Please reassign their active contracts to another Jockey (Late Jockey Change) or scratch the horse before locking.");
-            }
-            else if (user.Role?.Name == "Owner")
-            {
-                if (await _userRepository.HasUpcomingOwnerAssignmentsAsync(id))
-                    throw new InvalidOperationException("Cannot lock this Owner because they have horses actively registered in upcoming tournaments.");
-            }
-            else if (user.Role?.Name == "Referee")
-            {
-                if (await _userRepository.HasUpcomingRefereeAssignmentsAsync(id))
-                    throw new InvalidOperationException("Cannot lock this Referee because they are assigned to officiate upcoming races.");
-            }
-            else if (user.Role?.Name == "Spectator")
-            {
-                if (await _userRepository.HasPendingSpectatorDependenciesAsync(id))
-                    throw new InvalidOperationException("Cannot lock this Spectator because they have pending bets or pending withdrawal requests.");
+                throw new HorseRacing.Domain.Exceptions.LockConstraintException(blockers);
             }
         }
 

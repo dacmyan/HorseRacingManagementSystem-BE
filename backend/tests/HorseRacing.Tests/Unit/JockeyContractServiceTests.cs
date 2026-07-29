@@ -124,7 +124,7 @@ public class JockeyContractServiceTests
         // Verify other owner was notified
         _notificationMock.Verify(n => n.SendNotificationToUserAsync(
             200,
-            "Lời mời nài ngựa bị hủy",
+            "Jockey invitation cancelled",
             It.Is<string>(s => s.Contains("Silver Horse") && s.Contains("Jockey A") && s.Contains("Gold Cup")),
             "System",
             2,

@@ -42,7 +42,7 @@ public class AuthService : IAuthService
 
         if (!user.IsEmailConfirmed)
         {
-            throw new UnauthorizedAccessException("Tài khoản chưa được kích hoạt. Vui lòng kiểm tra email của bạn để thực hiện xác thực.");
+            throw new UnauthorizedAccessException("Account is not activated. Please check your email for verification.");
         }
 
         var token = _jwtTokenGenerator.GenerateToken(user);
@@ -115,28 +115,28 @@ public class AuthService : IAuthService
             var verificationLink = $"{baseUrl}/api/auth/verify-email?email={Uri.EscapeDataString(newUser.Email)}&token={Uri.EscapeDataString(verificationToken)}";
             var htmlBody = $@"
 <div style=""font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;"">
-    <h2 style=""color: #333; text-align: center;"">Xác Thực Tài Khoản Đăng Ký</h2>
-    <p>Xin chào <strong>{newUser.FullName}</strong>,</p>
-    <p>Cảm ơn bạn đã đăng ký tài khoản tại hệ thống Horse Racing Management System.</p>
-    <p>Vui lòng click vào liên kết bên dưới để xác thực và kích hoạt tài khoản của bạn (liên kết có hiệu lực trong vòng 15 phút):</p>
+    <h2 style=""color: #333; text-align: center;"">Account Verification</h2>
+    <p>Hello <strong>{newUser.FullName}</strong>,</p>
+    <p>Thank you for registering an account on the Horse Racing Management System.</p>
+    <p>Please click the link below to verify and activate your account (link is valid for 15 minutes):</p>
     <div style=""text-align: center; margin: 30px 0;"">
-        <a href=""{verificationLink}"" style=""background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;"">Xác Thực Email</a>
+        <a href=""{verificationLink}"" style=""background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;"">Verify Email</a>
     </div>
-    <p>Nếu nút trên không hoạt động, bạn cũng có thể sao chép liên kết dưới đây vào trình duyệt của mình:</p>
+    <p>If the button above does not work, you can also copy the link below into your browser:</p>
     <p style=""word-break: break-all;""><a href=""{verificationLink}"">{verificationLink}</a></p>
     <hr style=""border: 0; border-top: 1px solid #eee; margin: 20px 0;"" />
-    <p style=""font-size: 12px; color: #777; text-align: center;"">Đây là email tự động từ hệ thống. Vui lòng không phản hồi lại email này.</p>
+    <p style=""font-size: 12px; color: #777; text-align: center;"">This is an automated email from the system. Please do not reply.</p>
 </div>";
-            await _emailService.SendEmailAsync(newUser.Email, "Xác thực tài khoản Horse Racing Management System", htmlBody);
+            await _emailService.SendEmailAsync(newUser.Email, "Horse Racing Management System Account Verification", htmlBody);
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Đăng ký thành công nhưng không thể gửi email xác thực. Chi tiết lỗi SMTP: {ex.Message}", ex);
+            throw new InvalidOperationException($"Registration successful but verification email could not be sent. SMTP Error: {ex.Message}", ex);
         }
 
         return new AuthResponse
         {
-            Message = "Đăng ký thành công. Vui lòng kiểm tra email của bạn để thực hiện xác thực và kích hoạt tài khoản.",
+            Message = "Registration successful. Please check your email to verify and activate your account.",
             Result = new AuthResult
             {
                 AccessToken = string.Empty,
@@ -177,7 +177,7 @@ public class AuthService : IAuthService
                 roleName.Equals("Referee", StringComparison.OrdinalIgnoreCase) || 
                 roleName.Equals("RaceReferee", StringComparison.OrdinalIgnoreCase))
             {
-                throw new UnauthorizedAccessException("Tài khoản thuộc nhóm quản trị hệ thống không được phép liên kết tự động bằng Google Login.");
+                throw new UnauthorizedAccessException("System administrator accounts are not allowed to be linked automatically via Google Login.");
             }
 
             user = existingUser;

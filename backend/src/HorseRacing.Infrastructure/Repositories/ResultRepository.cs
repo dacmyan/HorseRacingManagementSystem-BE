@@ -32,6 +32,13 @@ public class ResultRepository : IResultRepository
             .FirstOrDefaultAsync(rr => rr.RaceId == raceId);
     }
 
+    public async Task<int?> GetRefereeIdByUserIdAsync(int userId)
+    {
+        var profile = await _context.Set<RefereeProfile>()
+            .FirstOrDefaultAsync(r => r.UserId == userId);
+        return profile?.RefereeId;
+    }
+
     public async Task<RaceRefereeAssignment?> GetAssignmentAsync(long raceId, int refereeId)
     {
         return await _context.RaceRefereeAssignments

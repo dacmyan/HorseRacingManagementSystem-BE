@@ -8,5 +8,5 @@ public interface IAdminService
     Task<CreateAccountResponseDto> CreateAccountAsync(CreateAccountRequestDto request);
     Task<IEnumerable<RoleResponseDto>> GetRolesAsync();
     Task<IEnumerable<AccountResponseDto>> GetAccountsAsync();
-    Task<AppUser> UpdateUserStatusAsync(int id, int currentAdminId);
+    Task<AppUser> UpdateUserStatusAsync(int id, int currentAdminId, bool forceLock = false);
 }

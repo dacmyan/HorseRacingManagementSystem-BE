@@ -1,0 +1,27 @@
+--- src\HorseRacing.Application\Features\MedicalCheck\Services\MedicalCheckService.cs ---
+178: var failTitle = "Khám sức khỏe định kỳ không đạt";
+179: var failContent = $"Ngựa {horseName} của bạn không đạt yêu cầu khám lại sức khỏe định kỳ vì lý do: {request.FailReason}.";
+185: var passTitle = "Khám sức khỏe đạt (Healthy)";
+186: var passContent = $"Ngựa {horseName} của bạn đã đạt yêu cầu khám sức khỏe định kỳ và đã hồi phục (Healthy).";
+264: <p><strong>Ghi chú từ bác sĩ thú y:</strong> {request.Notes ?? "Không có"}</p>
+361: var tournamentName = record.Registration.Tournament?.Name ?? "Giải đấu";
+362: var failTitle = "Cập nhật kết quả khám sức khỏe: KHÔNG ĐẠT";
+363: var failReason = record.FailReason ?? "Không có lý do cụ thể";
+373: <p><strong>Ghi chú:</strong> {notes ?? "Không có"}</p>
+556: var failTitle      = "⚠️ Horse disqualified due to medical check";
+575: <p><strong>Ghi chú từ bác sĩ:</strong> {request.Notes ?? "Không có"}</p>
+606: "⚠️ Bet Update — Horse withdrawn from race",
+707: var title = "Ngựa đã hồi phục sức khỏe";
+708: var content = $"Ngựa {horse.Name} của bạn đã được bác sĩ thú y xác nhận hồi phục (trạng thái: Healthy). Bạn đã có thể đăng ký giải đấu mới cho ngựa.";
+--- src\HorseRacing.Application\Features\ContractAndRegistration\Services\JockeyContractService.cs ---
+226: var ownerSubject = "Đề nghị hợp đồng đã được gửi";
+239: var jockeySubject = "Lời mời hợp đồng nài ngựa mới";
+355: "Lời mời nài ngựa bị hủy",
+356: $"Lời mời nài ngựa cho ngựa '{otherContract.Horse?.Name ?? "Horse"}' gửi tới Jockey '{contract.Jockey?.FullName ?? "Jockey"}' đã bị tự động hủy do Jockey đã nhận lời mời từ chủ ngựa khác trong giải đấu '{contract.Tournament?.Name ?? "Tournament"}'.",
+385: var ownerSubject = "Phản hồi hợp đồng nài ngựa";
+389: <p>Nài ngựa <strong>{contract.Jockey?.FullName ?? "Jockey"}</strong> đã phản hồi <strong>{request.Status}</strong> đối với lời mời cưỡi ngựa <strong>{contract.Horse?.Name ?? "Horse"}</strong>.</p>
+398: var jockeySubject = "Cập nhật trạng thái hợp đồng nài ngựa";
+439: var ownerSubject = "Hủy lời mời nài ngựa";
+452: var jockeySubject = "Hợp đồng bị hủy từ chủ ngựa";
+--- src\HorseRacing.Application\Features\ContractAndRegistration\Services\RegistrationService.cs ---
+--- src\HorseRacing.Application\Features\ContractAndRegistration\Services\RegistrationService.cs ---

@@ -191,10 +191,7 @@ public class RefereeController : ControllerBase
     {
         try
         {
-            var userId = GetCurrentUserId();
-            var refereeId = await _refereeService.GetRefereeIdByUserIdAsync(userId);
             request.RaceId = raceId;
-            request.RefereeId = (int)refereeId;
             
             var response = await _resultService.SubmitResultAsync(request);
             return StatusCode(StatusCodes.Status201Created, response);
@@ -222,10 +219,6 @@ public class RefereeController : ControllerBase
     {
         try
         {
-            var userId = GetCurrentUserId();
-            var refereeId = await _refereeService.GetRefereeIdByUserIdAsync(userId);
-            request.RefereeId = (int)refereeId;
-            
             var response = await _resultService.SubmitResultAsync(request);
             return StatusCode(StatusCodes.Status201Created, response);
         }

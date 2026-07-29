@@ -84,7 +84,15 @@ public class WalletService : IWalletService
             CreatedAt = DateTime.UtcNow
         };
         await _transactionRepository.AddAsync(transaction);
-        await _transactionRepository.SaveChangesAsync();
+        
+        try
+        {
+            await _transactionRepository.SaveChangesAsync();
+        }
+        catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
+        {
+            throw new InvalidOperationException("Your wallet balance was modified by another transaction. Please try again.");
+        }
 
         // Create wallet notification
         try
@@ -116,7 +124,7 @@ public class WalletService : IWalletService
                      <p>Your new balance is: <strong>{wallet.Balance:N2}$</strong>.</p>
                      <p>Thank you for using our services.</p>
                  ";
-                await _emailService.SendEmailAsync(user.Email, subject, body);
+                try { await _emailService.SendEmailAsync(user.Email, subject, body); } catch { /* ignore email error */ }
             }
         }
         catch (Exception ex)
@@ -152,18 +160,27 @@ public class WalletService : IWalletService
             WalletId = wallet.WalletId,
             Amount = -request.Amount,
             Type = "Withdraw",
+            Status = "Pending",
             CreatedAt = DateTime.UtcNow
         };
         await _transactionRepository.AddAsync(transaction);
-        await _transactionRepository.SaveChangesAsync();
+        
+        try
+        {
+            await _transactionRepository.SaveChangesAsync();
+        }
+        catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
+        {
+            throw new InvalidOperationException("Your wallet balance was modified by another transaction. Please try again.");
+        }
 
         // Create wallet notification
         try
         {
             await _notificationService.SendNotificationToUserAsync(
                 userId,
-                "Withdrawal Successful",
-                $"You successfully withdrew {request.Amount:N2}$ from your wallet. New balance: {wallet.Balance:N2}$.",
+                "Withdrawal Pending",
+                $"You requested to withdraw {request.Amount:N2}$ from your wallet. Your current balance is {wallet.Balance:N2}$. This request is pending Admin approval.",
                 "Wallet",
                 actionUrl: "/spectator/wallet/overview"
             );
@@ -179,15 +196,16 @@ public class WalletService : IWalletService
             var user = await _userRepository.GetByIdAsync(userId);
             if (user != null && !string.IsNullOrEmpty(user.Email))
             {
-                 var subject = "Withdrawal Receipt: Withdrawal successful";
+                 var subject = "Withdrawal Request Received";
                  var body = $@"
-                     <h2>Withdrawal Successful!</h2>
+                     <h2>Withdrawal Request Pending</h2>
                      <p>Hello {user.FullName},</p>
-                     <p>You have successfully withdrew <strong>{request.Amount:N2}$</strong> from your wallet.</p>
-                     <p>Your new balance is: <strong>{wallet.Balance:N2}$</strong>.</p>
+                     <p>We have received your request to withdraw <strong>{request.Amount:N2}$</strong> from your wallet.</p>
+                     <p>Your current balance after deduction is: <strong>{wallet.Balance:N2}$</strong>.</p>
+                     <p>This request is currently pending Admin approval. You will be notified once it is processed.</p>
                      <p>Thank you for using our services.</p>
                  ";
-                await _emailService.SendEmailAsync(user.Email, subject, body);
+                try { await _emailService.SendEmailAsync(user.Email, subject, body); } catch { /* ignore email error */ }
             }
         }
         catch (Exception ex)

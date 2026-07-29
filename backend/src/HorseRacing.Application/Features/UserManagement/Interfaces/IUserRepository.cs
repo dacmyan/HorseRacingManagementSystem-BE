@@ -23,4 +23,5 @@ public interface IUserRepository
     Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId);
     Task<bool> HasUpcomingRefereeAssignmentsAsync(int refereeId);
     Task<bool> HasPendingSpectatorDependenciesAsync(int spectatorId);
+    Task<List<string>> GetLockingConstraintsAsync(int userId, string role);
 }

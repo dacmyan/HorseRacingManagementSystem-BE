@@ -9,6 +9,8 @@ using HorseRacing.Application.Features.FinancialRewards.Interfaces;
 using HorseRacing.Application.Features.BettingEngine.Interfaces;
 using System.Linq;
 
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
 using HorseRacing.Application.Features.Notifications.Interfaces;
 using HorseRacing.Application.Features.TournamentAndRacing.Services;
 
@@ -22,6 +24,7 @@ public class RaceResultService : IRaceResultService
     private readonly INotificationService _notificationService;
     private readonly IPrizePayoutService _prizePayoutService;
     private readonly ITournamentService _tournamentService;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
     public RaceResultService(
         IResultRepository repository,
@@ -29,7 +32,8 @@ public class RaceResultService : IRaceResultService
         IPredictionService predictionService,
         INotificationService notificationService,
         IPrizePayoutService prizePayoutService,
-        ITournamentService tournamentService)
+        ITournamentService tournamentService,
+        IHttpContextAccessor httpContextAccessor)
     {
         _repository = repository;
         _betPayoutService = betPayoutService;
@@ -37,6 +41,7 @@ public class RaceResultService : IRaceResultService
         _notificationService = notificationService;
         _prizePayoutService = prizePayoutService;
         _tournamentService = tournamentService;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     private static DateTime VietnamNow => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time");
@@ -47,6 +52,23 @@ public class RaceResultService : IRaceResultService
         {
             throw new ArgumentNullException(nameof(request));
         }
+
+        // 0. Extract RefereeId from JWT Claims securely
+        var nameIdentifier = _httpContextAccessor.HttpContext?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+            ?? _httpContextAccessor.HttpContext?.User?.FindFirst("sub")?.Value;
+            
+        if (string.IsNullOrEmpty(nameIdentifier) || !int.TryParse(nameIdentifier, out var userId))
+        {
+            throw new InvalidOperationException("Unauthorized: Unable to extract user identity.");
+        }
+
+        var refereeId = await _repository.GetRefereeIdByUserIdAsync(userId);
+        if (refereeId == null)
+        {
+            throw new InvalidOperationException("User is not a registered referee.");
+        }
+        
+        request.RefereeId = refereeId.Value;
 
         // 1. Validate race existence
         var race = await _repository.GetRaceByIdAsync(request.RaceId);
