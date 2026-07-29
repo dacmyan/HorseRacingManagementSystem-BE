@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using HorseRacing.API.Services;
 using HorseRacing.Application.Features.UserManagement.Interfaces;
 using HorseRacing.Application.Features.UserManagement.Services;
 using HorseRacing.Application.Common.Interfaces;
@@ -55,7 +56,7 @@ public static class ServiceExtensions
         services.AddScoped<IOwnerDashboardService, OwnerDashboardService>();
         services.AddScoped<IAdminDashboardService, AdminDashboardService>();
         services.AddScoped<IAdminActionService, AdminActionService>();
-
+        services.AddScoped<IDemoService, DemoService>();
         return services;
     }
 }
