@@ -124,4 +124,39 @@ public class UserRepository : IUserRepository
 
         return hasPendingBets || hasPendingWithdrawals;
     }
+
+    public async Task<List<string>> GetLockingConstraintsAsync(int userId, string role)
+    {
+        var blockers = new List<string>();
+
+        if (role == "Jockey")
+        {
+            if (await HasUpcomingJockeyAssignmentsAsync(userId))
+                blockers.Add("User has active jockey contracts or upcoming races.");
+        }
+        else if (role == "Owner")
+        {
+            if (await HasUpcomingOwnerAssignmentsAsync(userId))
+                blockers.Add("User has horses actively registered in ongoing tournaments.");
+        }
+        else if (role == "Referee")
+        {
+            if (await HasUpcomingRefereeAssignmentsAsync(userId))
+                blockers.Add("User is assigned to officiate upcoming races.");
+        }
+
+        var wallet = await _context.Set<Wallet>().FirstOrDefaultAsync(w => w.UserId == userId);
+        if (wallet != null && wallet.Balance > 0)
+        {
+            blockers.Add($"User wallet has a positive balance of {wallet.Balance}.");
+        }
+
+        var hasPendingBets = await _context.Set<Bet>().AnyAsync(b => b.UserId == userId && b.Status == "Pending");
+        if (hasPendingBets)
+        {
+            blockers.Add("User has pending bets.");
+        }
+
+        return blockers;
+    }
 }

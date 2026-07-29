@@ -8,6 +8,7 @@ using HorseRacing.Application.Features.FinancialRewards.Interfaces;
 using HorseRacing.Application.Features.Notifications.Interfaces;
 using HorseRacing.Domain.Entities;
 using HorseRacing.Domain.Entities.Tournaments;
+using Microsoft.Extensions.Configuration;
 
 namespace HorseRacing.Application.Features.BettingEngine.Services;
 
@@ -17,17 +18,20 @@ public class BettingService : IBettingService
     private readonly IWalletRepository _walletRepository;
     private readonly IWalletTransactionRepository _transactionRepository;
     private readonly INotificationService _notificationService;
+    private readonly IConfiguration _configuration;
 
     public BettingService(
         IBetRepository betRepository,
         IWalletRepository walletRepository,
         IWalletTransactionRepository transactionRepository,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        IConfiguration configuration)
     {
         _betRepository = betRepository;
         _walletRepository = walletRepository;
         _transactionRepository = transactionRepository;
         _notificationService = notificationService;
+        _configuration = configuration;
     }
 
     public async Task<decimal> CalculateCurrentOddsAsync(long raceId, int horseId)
@@ -60,6 +64,12 @@ public class BettingService : IBettingService
             throw new ArgumentException("Bet amount must be greater than zero.");
         }
 
+        var minBetAmount = _configuration.GetValue<decimal>("BettingSettings:MinimumAmount", 10000m);
+        if (request.Amount < minBetAmount)
+        {
+            throw new ArgumentException($"Bet amount must be at least {minBetAmount:N0}.");
+        }
+
         var entry = await _betRepository.GetRaceEntryByIdAsync(request.RaceEntryId);
 
         if (entry == null)
@@ -70,7 +80,19 @@ public class BettingService : IBettingService
         var race = entry.Race;
         if (race == null)
         {
-            throw new ArgumentException("Race details not found for this entry.");
+            throw new InvalidOperationException("Race entry is not associated with a valid race.");
+        }
+
+        if (string.Equals(race.Status, "Finished", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(race.Status, "Running", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Cannot place bet. Race status is '{race.Status}'.");
+        }
+
+        var existingBets = await _betRepository.GetByRaceIdAsync(race.RaceId);
+        if (existingBets.Any(b => b.UserId == userId && b.Status == "Pending"))
+        {
+            throw new InvalidOperationException("You already have a pending bet for this race. Arbitrage betting is not allowed.");
         }
 
         var horse = entry.Registration?.Horse;
@@ -138,7 +160,14 @@ public class BettingService : IBettingService
         await _betRepository.AddAsync(bet);
 
         // Save wallet changes
-        await _walletRepository.SaveChangesAsync();
+        try
+        {
+            await _walletRepository.SaveChangesAsync();
+        }
+        catch (Exception ex) when (ex.GetType().Name == "DbUpdateConcurrencyException")
+        {
+            throw new InvalidOperationException("Your wallet balance was modified by another transaction. Please try again.");
+        }
 
         await _notificationService.SendNotificationToUserAsync(
             userId,

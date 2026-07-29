@@ -29,4 +29,7 @@ public class Horse
     public decimal? AverageTime { get; set; }
     public decimal? RecentAverageTime { get; set; }
     public decimal? WinRate { get; set; }
+
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
 }

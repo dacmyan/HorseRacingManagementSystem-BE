@@ -223,29 +223,29 @@ public class JockeyContractService : IJockeyContractService
         var ownerUser = await _userRepository.GetByIdAsync(ownerUserId);
         if (ownerUser != null && !string.IsNullOrEmpty(ownerUser.Email))
         {
-            var ownerSubject = "Đề nghị hợp đồng đã được gửi";
+            var ownerSubject = "Contract offer sent";
             var ownerBody = $@"
-                <h2>Đề nghị hợp đồng nài ngựa đã được gửi</h2>
-                <p>Xin chào {ownerUser.FullName},</p>
-                <p>Bạn đã gửi thành công lời mời thuê nài ngựa <strong>{jockeyUser.FullName}</strong> cho ngựa <strong>{horse.Name}</strong> tham gia giải đấu <strong>{tournament.Name}</strong>.</p>
-                <p>Thời hạn hợp đồng: từ {request.StartDate:dd/MM/yyyy} đến {request.EndDate:dd/MM/yyyy}.</p>
-                <p>Trân trọng,</p>
+                <h2>Jockey contract offer sent</h2>
+                <p>Hello {ownerUser.FullName},</p>
+                <p>You have successfully sent a contract invitation to jockey <strong>{jockeyUser.FullName}</strong> for horse <strong>{horse.Name}</strong> in tournament <strong>{tournament.Name}</strong>.</p>
+                <p>Contract period: from {request.StartDate:dd/MM/yyyy} to {request.EndDate:dd/MM/yyyy}.</p>
+                <p>Best regards,</p>
             ";
-            await _emailService.SendEmailAsync(ownerUser.Email, ownerSubject, ownerBody);
+            try { await _emailService.SendEmailAsync(ownerUser.Email, ownerSubject, ownerBody); } catch { /* ignore email error */ }
         }
 
         if (!string.IsNullOrEmpty(jockeyUser.Email))
         {
-            var jockeySubject = "Lời mời hợp đồng nài ngựa mới";
+            var jockeySubject = "New jockey contract invitation";
             var jockeyBody = $@"
-                <h2>Bạn có một lời mời hợp đồng mới!</h2>
-                <p>Xin chào {jockeyUser.FullName},</p>
-                <p>Bạn vừa nhận được lời mời cưỡi ngựa <strong>{horse.Name}</strong> từ chủ ngựa <strong>{horse.Owner?.FullName ?? "Owner"}</strong> trong giải đấu <strong>{tournament.Name}</strong>.</p>
-                <p>Thời hạn hợp đồng: từ {request.StartDate:dd/MM/yyyy} đến {request.EndDate:dd/MM/yyyy}.</p>
-                <p>Vui lòng đăng nhập hệ thống để phản hồi lời mời.</p>
-                <p>Trân trọng,</p>
+                <h2>You have a new contract invitation!</h2>
+                <p>Hello {jockeyUser.FullName},</p>
+                <p>You have received an invitation to ride horse <strong>{horse.Name}</strong> from owner <strong>{horse.Owner?.FullName ?? "Owner"}</strong> in tournament <strong>{tournament.Name}</strong>.</p>
+                <p>Contract period: from {request.StartDate:dd/MM/yyyy} to {request.EndDate:dd/MM/yyyy}.</p>
+                <p>Please log in to the system to respond to the invitation.</p>
+                <p>Best regards,</p>
             ";
-            await _emailService.SendEmailAsync(jockeyUser.Email, jockeySubject, jockeyBody);
+            try { await _emailService.SendEmailAsync(jockeyUser.Email, jockeySubject, jockeyBody); } catch { /* ignore email error */ }
         }
 
         // Fetch populated contract for mapped response
@@ -352,8 +352,8 @@ public class JockeyContractService : IJockeyContractService
                 {
                     await _notificationService.SendNotificationToUserAsync(
                         otherContract.Horse?.OwnerId ?? 0,
-                        "Lời mời nài ngựa bị hủy",
-                        $"Lời mời nài ngựa cho ngựa '{otherContract.Horse?.Name ?? "Horse"}' gửi tới Jockey '{contract.Jockey?.FullName ?? "Jockey"}' đã bị tự động hủy do Jockey đã nhận lời mời từ chủ ngựa khác trong giải đấu '{contract.Tournament?.Name ?? "Tournament"}'.",
+                        "Jockey invitation cancelled",
+                        $"The jockey invitation for horse '{otherContract.Horse?.Name ?? "Horse"}' sent to Jockey '{contract.Jockey?.FullName ?? "Jockey"}' was automatically cancelled because the jockey accepted an invitation from another owner in tournament '{contract.Tournament?.Name ?? "Tournament"}'.",
                         "System",
                         referenceId: (int)otherContract.ContractId,
                         actionUrl: "/owner/jockeys"
@@ -382,27 +382,27 @@ public class JockeyContractService : IJockeyContractService
         var ownerUser = await _userRepository.GetByIdAsync(contract.Horse?.OwnerId ?? 0);
         if (ownerUser != null && !string.IsNullOrEmpty(ownerUser.Email))
         {
-            var ownerSubject = "Phản hồi hợp đồng nài ngựa";
+            var ownerSubject = "Jockey contract response";
             var ownerBody = $@"
-                <h2>Phản hồi từ Nài ngựa</h2>
-                <p>Xin chào {ownerUser.FullName},</p>
-                <p>Nài ngựa <strong>{contract.Jockey?.FullName ?? "Jockey"}</strong> đã phản hồi <strong>{request.Status}</strong> đối với lời mời cưỡi ngựa <strong>{contract.Horse?.Name ?? "Horse"}</strong>.</p>
-                <p>Trân trọng,</p>
+                <h2>Response from Jockey</h2>
+                <p>Hello {ownerUser.FullName},</p>
+                <p>Jockey <strong>{contract.Jockey?.FullName ?? "Jockey"}</strong> has responded <strong>{request.Status}</strong> to the invitation to ride horse <strong>{contract.Horse?.Name ?? "Horse"}</strong>.</p>
+                <p>Best regards,</p>
             ";
-            await _emailService.SendEmailAsync(ownerUser.Email, ownerSubject, ownerBody);
+            try { await _emailService.SendEmailAsync(ownerUser.Email, ownerSubject, ownerBody); } catch { /* ignore email error */ }
         }
 
         var jockeyUser = await _userRepository.GetByIdAsync(jockeyUserId);
         if (jockeyUser != null && !string.IsNullOrEmpty(jockeyUser.Email))
         {
-            var jockeySubject = "Cập nhật trạng thái hợp đồng nài ngựa";
+            var jockeySubject = "Jockey contract status update";
             var jockeyBody = $@"
-                <h2>Cập nhật Hợp đồng</h2>
-                <p>Xin chào {jockeyUser.FullName},</p>
-                <p>Bạn đã phản hồi <strong>{request.Status}</strong> cho hợp đồng cưỡi ngựa <strong>{contract.Horse?.Name ?? "Horse"}</strong>.</p>
-                <p>Trân trọng,</p>
+                <h2>Contract Update</h2>
+                <p>Hello {jockeyUser.FullName},</p>
+                <p>You have responded <strong>{request.Status}</strong> to the riding contract for horse <strong>{contract.Horse?.Name ?? "Horse"}</strong>.</p>
+                <p>Best regards,</p>
             ";
-            await _emailService.SendEmailAsync(jockeyUser.Email, jockeySubject, jockeyBody);
+            try { await _emailService.SendEmailAsync(jockeyUser.Email, jockeySubject, jockeyBody); } catch { /* ignore email error */ }
         }
 
         return MapToResponse(contract);
@@ -436,27 +436,27 @@ public class JockeyContractService : IJockeyContractService
         var ownerUser = await _userRepository.GetByIdAsync(ownerUserId);
         if (ownerUser != null && !string.IsNullOrEmpty(ownerUser.Email))
         {
-            var ownerSubject = "Hủy lời mời nài ngựa";
+            var ownerSubject = "Cancel jockey invitation";
             var ownerBody = $@"
-                <h2>Hủy hợp đồng</h2>
-                <p>Xin chào {ownerUser.FullName},</p>
-                <p>Bạn đã hủy lời mời nài ngựa đối với hợp đồng của ngựa <strong>{contract.Horse?.Name ?? "Horse"}</strong>.</p>
-                <p>Trân trọng,</p>
+                <h2>Contract Cancelled</h2>
+                <p>Hello {ownerUser.FullName},</p>
+                <p>You have cancelled the jockey invitation for horse <strong>{contract.Horse?.Name ?? "Horse"}</strong>.</p>
+                <p>Best regards,</p>
             ";
-            await _emailService.SendEmailAsync(ownerUser.Email, ownerSubject, ownerBody);
+            try { await _emailService.SendEmailAsync(ownerUser.Email, ownerSubject, ownerBody); } catch { /* ignore email error */ }
         }
 
         var jockeyUser = await _userRepository.GetByIdAsync(contract.JockeyId);
         if (jockeyUser != null && !string.IsNullOrEmpty(jockeyUser.Email))
         {
-            var jockeySubject = "Hợp đồng bị hủy từ chủ ngựa";
+            var jockeySubject = "Contract cancelled by owner";
             var jockeyBody = $@"
-                <h2>Hủy hợp đồng</h2>
-                <p>Xin chào {jockeyUser.FullName},</p>
-                <p>Lời mời cưỡi ngựa <strong>{contract.Horse?.Name ?? "Horse"}</strong> đã bị hủy bởi chủ ngựa.</p>
-                <p>Trân trọng,</p>
+                <h2>Contract Cancelled</h2>
+                <p>Hello {jockeyUser.FullName},</p>
+                <p>The invitation to ride horse <strong>{contract.Horse?.Name ?? "Horse"}</strong> has been cancelled by the owner.</p>
+                <p>Best regards,</p>
             ";
-            await _emailService.SendEmailAsync(jockeyUser.Email, jockeySubject, jockeyBody);
+            try { await _emailService.SendEmailAsync(jockeyUser.Email, jockeySubject, jockeyBody); } catch { /* ignore email error */ }
         }
 
         return MapToResponse(contract);

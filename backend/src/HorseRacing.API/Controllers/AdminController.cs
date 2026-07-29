@@ -9,7 +9,9 @@ using HorseRacing.Application.Features.OfficiatingAndResults.Interfaces;
 using HorseRacing.Application.Features.OfficiatingAndResults.DTOs;
 using HorseRacing.Application.Features.ContractAndRegistration.DTOs;
 using HorseRacing.Application.Features.ContractAndRegistration.Interfaces;
+using HorseRacing.Application.Features.OfficiatingAndResults.Interfaces;
 using HorseRacing.Application.Features.Notifications.Interfaces;
+using HorseRacing.Domain.Exceptions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -866,13 +868,17 @@ public class AdminController : ControllerBase
     }
 
     [HttpPut("users/{id}/status")]
-    public async Task<IActionResult> UpdateUserStatus(int id)
+    public async Task<IActionResult> UpdateUserStatus(int id, [FromQuery] bool forceLock = false)
     {
         try
         {
             var currentAdminId = GetCurrentUserId();
-            var user = await _adminService.UpdateUserStatusAsync(id, currentAdminId);
+            var user = await _adminService.UpdateUserStatusAsync(id, currentAdminId, forceLock);
             return Ok(new { message = "User status updated successfully", result = user });
+        }
+        catch (LockConstraintException ex)
+        {
+            return BadRequest(new { message = ex.Message, blockers = ex.Blockers });
         }
         catch (KeyNotFoundException ex)
         {

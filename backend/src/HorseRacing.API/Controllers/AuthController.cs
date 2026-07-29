@@ -55,7 +55,7 @@ public class AuthController : ControllerBase
             var response = await _authService.GoogleLoginAsync(request);
             if (response == null)
             {
-                return Unauthorized(new { message = "Mã xác thực Google không hợp lệ hoặc đã hết hạn." });
+                return Unauthorized(new { message = "Invalid or expired Google authentication code." });
             }
 
             return Ok(response);
@@ -66,7 +66,7 @@ public class AuthController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Đã xảy ra lỗi trong quá trình xác thực.", detail = ex.Message });
+            return StatusCode(500, new { message = "An error occurred during the authentication process.", detail = ex.Message });
         }
     }
 

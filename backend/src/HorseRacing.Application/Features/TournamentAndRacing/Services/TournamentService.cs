@@ -587,7 +587,7 @@ public class TournamentService : ITournamentService
             string.Equals(tournament.Status, "Finished", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(tournament.Status, "Completed", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Giải đấu đã hoặc đang diễn ra hoặc đã kết thúc. Không được phép gán lại làn đua!");
+            throw new InvalidOperationException("This tournament has already started or completed. Lane assignment is no longer allowed.");
         }
 
         // Validation 2b: Prevent generating races if any race is Live/InProgress/Finished/Completed
@@ -602,7 +602,7 @@ public class TournamentService : ITournamentService
                     string.Equals(race.Status, "Finished", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(race.Status, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new InvalidOperationException("Lượt đua này đã hoặc đang bắt đầu diễn ra. Không được phép gán lại làn đua!");
+                    throw new InvalidOperationException("This race has already started. Lane assignment is no longer allowed.");
                 }
             }
         }
