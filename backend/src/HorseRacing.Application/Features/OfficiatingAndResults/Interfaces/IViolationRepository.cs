@@ -12,5 +12,6 @@ public interface IViolationRepository
     Task<RaceRefereeAssignment?> GetAssignmentAsync(long raceId, int refereeId);
     Task AddViolationAsync(RaceViolation violation);
     Task<List<RaceViolation>> GetViolationsByRaceIdAsync(long raceId);
+    Task<RaceViolation?> GetViolationByIdAsync(long violationId);
     Task SaveChangesAsync();
 }

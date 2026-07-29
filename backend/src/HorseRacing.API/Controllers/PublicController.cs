@@ -1,6 +1,8 @@
 using System;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
 using HorseRacing.Domain.Entities;
 using HorseRacing.Application.Features.Notifications.Interfaces;
 using HorseRacing.Application.Features.Notifications.DTOs;
@@ -8,11 +10,10 @@ using HorseRacing.Application.Features.UserManagement.DTOs;
 using HorseRacing.Application.Features.HorseManagement.DTOs;
 using HorseRacing.Application.Features.TournamentAndRacing.DTOs;
 using HorseRacing.Application.Features.TournamentAndRacing.Services;
-using HorseRacing.Infrastructure.Persistence;
+using HorseRacing.Application.Features.Public.Interfaces;
+using HorseRacing.Application.Features.Public.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using HorseRacing.Application.Features.OfficiatingAndResults.Interfaces;
 using HorseRacing.Application.Features.OfficiatingAndResults.DTOs;
 
@@ -22,31 +23,28 @@ namespace HorseRacing.API.Controllers;
 [Route("api/[controller]")]
 public class PublicController : ControllerBase
 {
-    private static DateTime VietnamNow => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time");
-
-private readonly AppDbContext _context;
-private readonly INotificationService _notificationService;
-private readonly IRaceService _raceService;
-private readonly IRoundService _roundService;
-private readonly ITournamentService _tournamentService;
-private readonly IRaceResultService _resultService;
-
+    private readonly INotificationService _notificationService;
+    private readonly IRaceService _raceService;
+    private readonly IRoundService _roundService;
+    private readonly ITournamentService _tournamentService;
+    private readonly IRaceResultService _resultService;
+    private readonly IPublicQueryService _publicQueryService;
 
     public PublicController(
-    AppDbContext context,
-    INotificationService notificationService,
-    IRaceService raceService,
-    IRoundService roundService,
-    ITournamentService tournamentService,
-    IRaceResultService resultService)
-{
-    _context = context;
-    _notificationService = notificationService;
-    _raceService = raceService;
-    _roundService = roundService;
-    _tournamentService = tournamentService;
-    _resultService = resultService;
-}
+        INotificationService notificationService,
+        IRaceService raceService,
+        IRoundService roundService,
+        ITournamentService tournamentService,
+        IRaceResultService resultService,
+        IPublicQueryService publicQueryService)
+    {
+        _notificationService = notificationService;
+        _raceService = raceService;
+        _roundService = roundService;
+        _tournamentService = tournamentService;
+        _resultService = resultService;
+        _publicQueryService = publicQueryService;
+    }
 
     private int GetCurrentUserId()
     {
@@ -55,7 +53,22 @@ private readonly IRaceResultService _resultService;
         {
             nameIdentifier = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
         }
-        return int.Parse(nameIdentifier ?? "0");
+        return int.TryParse(nameIdentifier, out var id) ? id : 0;
+    }
+
+    private bool IsAdmin()
+    {
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+    }
+    
+    private bool IsAllowedFullAccess()
+    {
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(role, "Referee", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(role, "HorseOwner", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(role, "Spectator", StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpGet("rankings/jockeys")]
@@ -64,21 +77,7 @@ private readonly IRaceResultService _resultService;
     {
         try
         {
-            var rankings = await _context.JockeyProfiles
-                .Include(jp => jp.User)
-                .Where(jp => jp.Status == "Active")
-                .OrderByDescending(jp => jp.RankingPoint)
-                .Select(jp => new JockeyRankingResponse
-                {
-                    JockeyId = (int)jp.JockeyId,
-                    UserId = jp.UserId,
-                    FullName = jp.User != null ? jp.User.FullName : "Unknown Jockey",
-                    Email = jp.User != null ? jp.User.Email : string.Empty,
-                    ExperienceYears = jp.ExperienceYears,
-                    RankingPoint = jp.RankingPoint
-                })
-                .ToListAsync();
-
+            var rankings = await _publicQueryService.GetJockeyRankingsAsync();
             return Ok(new { message = "Jockey rankings retrieved successfully", result = rankings });
         }
         catch (Exception ex)
@@ -93,35 +92,7 @@ private readonly IRaceResultService _resultService;
     {
         try
         {
-            // Fetch all finished results
-            var results = await _context.RaceResults.ToListAsync();
-            
-            // Fetch all horses with owners
-            var horses = await _context.Horses
-                .Include(h => h.Owner)
-                .ToListAsync();
-
-            var rankings = horses
-                .Select(h =>
-                {
-                    // Calculate wins count based on name match or ID match in Winner column
-                    var wins = results.Count(r => 
-                        r.Winner.Equals(h.Name, StringComparison.OrdinalIgnoreCase) || 
-                        r.Winner.Equals(h.HorseId.ToString()));
-
-                    return new HorseRankingResponse
-                    {
-                        HorseId = (int)h.HorseId,
-                        Name = h.Name,
-                        Age = h.Age,
-                        Breed = h.Breed,
-                        OwnerName = h.Owner != null ? h.Owner.FullName : "Unknown Owner",
-                        WinsCount = wins
-                    };
-                })
-                .OrderByDescending(h => h.WinsCount)
-                .ToList();
-
+            var rankings = await _publicQueryService.GetHorseRankingsAsync();
             return Ok(new { message = "Horse rankings retrieved successfully", result = rankings });
         }
         catch (Exception ex)
@@ -214,24 +185,17 @@ private readonly IRaceResultService _resultService;
         {
             var schedule = await _raceService.GetPublicRaceScheduleAsync();
 
-            var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
-
-            if (!isAdmin)
+            if (!IsAdmin())
             {
-                var now = VietnamNow;
-                var futureTournamentIds = await _context.Tournaments
-                    .Where(t => 
-                        (!t.RegistrationStartDate.HasValue || t.RegistrationStartDate.Value > now) && 
-                        (!t.StartDate.HasValue || t.StartDate.Value > now)
-                    )
-                    .Select(t => t.TournamentId)
-                    .ToListAsync();
-
-                if (futureTournamentIds.Any())
+                var visibleSchedule = new List<RaceScheduleResponse>();
+                foreach (var s in schedule)
                 {
-                    schedule = schedule.Where(s => !futureTournamentIds.Contains(s.TournamentId)).ToList();
+                    if (await _publicQueryService.IsTournamentVisibleAsync(s.TournamentId, false))
+                    {
+                        visibleSchedule.Add(s);
+                    }
                 }
+                schedule = visibleSchedule;
             }
 
             return Ok(new { message = "Public race schedule retrieved successfully", result = schedule });
@@ -252,11 +216,7 @@ private readonly IRaceResultService _resultService;
             return NotFound(new { message = $"Tournament with ID {tournamentId} was not found." });
         }
 
-        var role = User.FindFirst(ClaimTypes.Role)?.Value;
-        bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
-        if (!isAdmin && 
-            (!tournament.RegistrationStartDate.HasValue || tournament.RegistrationStartDate.Value > VietnamNow) && 
-            (!tournament.StartDate.HasValue || tournament.StartDate.Value > VietnamNow))
+        if (!await _publicQueryService.IsTournamentVisibleAsync(tournamentId, IsAdmin()))
         {
             return NotFound(new { message = $"Tournament with ID {tournamentId} was not found." });
         }
@@ -280,17 +240,9 @@ private readonly IRaceResultService _resultService;
             return NotFound(new { message = $"Round with ID {roundId} was not found." });
         }
 
-        var role = User.FindFirst(ClaimTypes.Role)?.Value;
-        bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
-        if (!isAdmin)
+        if (!await _publicQueryService.IsTournamentVisibleAsync(round.TournamentId, IsAdmin()))
         {
-            var tournament = await _context.Tournaments.FindAsync(round.TournamentId);
-            if (tournament != null && 
-                (!tournament.RegistrationStartDate.HasValue || tournament.RegistrationStartDate.Value > VietnamNow) && 
-                (!tournament.StartDate.HasValue || tournament.StartDate.Value > VietnamNow))
-            {
-                return NotFound(new { message = $"Round with ID {roundId} was not found." });
-            }
+            return NotFound(new { message = $"Round with ID {roundId} was not found." });
         }
 
         return Ok(new { message = "Round details retrieved successfully", result = round });
@@ -302,78 +254,7 @@ private readonly IRaceResultService _resultService;
     {
         try
         {
-            var tournaments = await _tournamentService.GetAllTournamentsAsync();
-            
-            var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            bool isAllowed = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(role, "Referee", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(role, "HorseOwner", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(role, "Spectator", StringComparison.OrdinalIgnoreCase);
-
-            if (!isAllowed)
-            {
-                var now = VietnamNow;
-                tournaments = tournaments.Where(t => 
-                    (t.RegistrationStartDate.HasValue && t.RegistrationStartDate.Value <= now) || 
-                    (t.StartDate.HasValue && t.StartDate.Value <= now) ||
-                    (!t.RegistrationStartDate.HasValue && !t.StartDate.HasValue)
-                ).ToList();
-            }
-
-            var tournamentIds = tournaments.Select(t => t.TournamentId).ToList();
-            var prizes = await _context.Prizes
-                .Where(p => tournamentIds.Contains(p.TournamentId))
-                .ToListAsync();
-
-            var prizesGrouped = prizes.GroupBy(p => p.TournamentId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var registrations = await _context.Registrations
-                .Include(r => r.MedicalCheckRecords)
-                .Where(r => tournamentIds.Contains(r.TournamentId))
-                .ToListAsync();
-
-            var registrationsGrouped = registrations.GroupBy(r => r.TournamentId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var result = tournaments.Select(t => {
-                var tournamentRegs = registrationsGrouped.ContainsKey(t.TournamentId)
-                    ? registrationsGrouped[t.TournamentId]
-                    : new List<Registration>();
-
-                var approvedRegistration = tournamentRegs.Count(r => string.Equals(r.Status, "Approved", StringComparison.OrdinalIgnoreCase));
-                var qualifiedRegistration = tournamentRegs.Count(r => 
-                {
-                    if (!string.Equals(r.Status, "Approved", StringComparison.OrdinalIgnoreCase)) return false;
-                    var check = r.MedicalCheckRecords?.FirstOrDefault();
-                    if (check == null) return false;
-                    bool isMedicalPassed = string.Equals(check.MedicalResult, "Pass", StringComparison.OrdinalIgnoreCase) || 
-                                           string.Equals(check.MedicalResult, "Passed", StringComparison.OrdinalIgnoreCase);
-                    bool isDopingNegative = !string.Equals(check.DopingResult, "Positive", StringComparison.OrdinalIgnoreCase);
-                    return isMedicalPassed && isDopingNegative;
-                });
-
-                return new {
-                    t.TournamentId,
-                    t.Name,
-                    t.Description,
-                    t.RegistrationStartDate,
-                    t.RegistrationEndDate,
-                    t.StartDate,
-                    t.EndDate,
-                    t.Status,
-                    t.Rounds,
-                    t.CancelCount,
-                    t.HasMissingReferees,
-                    t.HasCompleteLaneAssignments,
-                    ApprovedRegistration = approvedRegistration,
-                    QualifiedRegistration = qualifiedRegistration,
-                    Prizes = prizesGrouped.ContainsKey(t.TournamentId)
-                        ? prizesGrouped[t.TournamentId].Select(p => (object)new { p.Id, p.RankPosition, p.Amount }).ToList()
-                        : new List<object>()
-                };
-            }).ToList();
-
+            var result = await _publicQueryService.GetTournamentsAsync(IsAllowedFullAccess());
             return Ok(new { message = "Tournaments retrieved successfully", result = result });
         }
         catch (Exception ex)
@@ -388,64 +269,11 @@ private readonly IRaceResultService _resultService;
     {
         try
         {
-            var tournament = await _tournamentService.GetTournamentByIdAsync(id);
-            if (tournament == null)
+            var result = await _publicQueryService.GetTournamentDetailAsync(id, IsAllowedFullAccess());
+            if (result == null)
             {
                 return NotFound(new { message = $"Tournament with ID {id} was not found." });
             }
-
-            var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            bool isAllowed = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(role, "Referee", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(role, "HorseOwner", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(role, "Spectator", StringComparison.OrdinalIgnoreCase);
-
-            if (!isAllowed && 
-                (!tournament.RegistrationStartDate.HasValue || tournament.RegistrationStartDate.Value > VietnamNow) && 
-                (!tournament.StartDate.HasValue || tournament.StartDate.Value > VietnamNow))
-            {
-                return NotFound(new { message = $"Tournament with ID {id} was not found." });
-            }
-
-            var prizes = await _context.Prizes
-                .Where(p => p.TournamentId == id)
-                .Select(p => new { p.Id, p.RankPosition, p.Amount })
-                .ToListAsync();
-
-            var registrations = await _context.Registrations
-                .Include(r => r.MedicalCheckRecords)
-                .Where(r => r.TournamentId == id)
-                .ToListAsync();
-
-            var approvedRegistration = registrations.Count(r => string.Equals(r.Status, "Approved", StringComparison.OrdinalIgnoreCase));
-            var qualifiedRegistration = registrations.Count(r => 
-            {
-                if (!string.Equals(r.Status, "Approved", StringComparison.OrdinalIgnoreCase)) return false;
-                var check = r.MedicalCheckRecords?.FirstOrDefault();
-                if (check == null) return false;
-                bool isMedicalPassed = string.Equals(check.MedicalResult, "Pass", StringComparison.OrdinalIgnoreCase) || 
-                                       string.Equals(check.MedicalResult, "Passed", StringComparison.OrdinalIgnoreCase);
-                bool isDopingNegative = !string.Equals(check.DopingResult, "Positive", StringComparison.OrdinalIgnoreCase);
-                return isMedicalPassed && isDopingNegative;
-            });
-
-            var result = new {
-                tournament.TournamentId,
-                tournament.Name,
-                tournament.Description,
-                tournament.RegistrationStartDate,
-                tournament.RegistrationEndDate,
-                tournament.StartDate,
-                tournament.EndDate,
-                tournament.Status,
-                tournament.Rounds,
-                tournament.CancelCount,
-                tournament.HasMissingReferees,
-                ApprovedRegistration = approvedRegistration,
-                QualifiedRegistration = qualifiedRegistration,
-                Prizes = prizes
-            };
-
             return Ok(new { message = "Tournament details retrieved successfully", result = result });
         }
         catch (Exception ex)
@@ -485,17 +313,9 @@ private readonly IRaceResultService _resultService;
                 return NotFound(new { message = $"Race with ID {id} was not found." });
             }
 
-            var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
-            if (!isAdmin)
+            if (!await _publicQueryService.IsTournamentVisibleAsync(race.TournamentId, IsAdmin()))
             {
-                var tournament = await _context.Tournaments.FindAsync(race.TournamentId);
-                if (tournament != null && 
-                    (!tournament.RegistrationStartDate.HasValue || tournament.RegistrationStartDate.Value > VietnamNow) && 
-                    (!tournament.StartDate.HasValue || tournament.StartDate.Value > VietnamNow))
-                {
-                    return NotFound(new { message = $"Race with ID {id} was not found." });
-                }
+                return NotFound(new { message = $"Race with ID {id} was not found." });
             }
 
             return Ok(new { message = "Race details retrieved successfully", result = race });
@@ -512,23 +332,10 @@ private readonly IRaceResultService _resultService;
     {
         try
         {
-            var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
-            if (!isAdmin)
+            var race = await _raceService.GetRaceByIdAsync(raceId);
+            if (race == null || !await _publicQueryService.IsTournamentVisibleAsync(race.TournamentId, IsAdmin()))
             {
-                var race = await _context.Races
-                    .Include(r => r.Round)
-                    .FirstOrDefaultAsync(r => r.RaceId == raceId);
-                if (race != null && race.Round != null)
-                {
-                    var tournament = await _context.Tournaments.FindAsync(race.Round.TournamentId);
-                    if (tournament != null && 
-                        (!tournament.RegistrationStartDate.HasValue || tournament.RegistrationStartDate.Value > VietnamNow) && 
-                        (!tournament.StartDate.HasValue || tournament.StartDate.Value > VietnamNow))
-                    {
-                        return NotFound(new { message = $"Race with ID {raceId} was not found." });
-                    }
-                }
+                 return NotFound(new { message = $"Race with ID {raceId} was not found." });
             }
 
             var entries = await _raceService.GetRaceEntriesByRaceIdAsync(raceId);
@@ -551,23 +358,10 @@ private readonly IRaceResultService _resultService;
     {
         try
         {
-            var role = User.FindFirst(ClaimTypes.Role)?.Value;
-            bool isAdmin = string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
-            if (!isAdmin)
+            var race = await _raceService.GetRaceByIdAsync(raceId);
+            if (race == null || !await _publicQueryService.IsTournamentVisibleAsync(race.TournamentId, IsAdmin()))
             {
-                var race = await _context.Races
-                    .Include(r => r.Round)
-                    .FirstOrDefaultAsync(r => r.RaceId == raceId);
-                if (race != null && race.Round != null)
-                {
-                    var tournament = await _context.Tournaments.FindAsync(race.Round.TournamentId);
-                    if (tournament != null && 
-                        (!tournament.RegistrationStartDate.HasValue || tournament.RegistrationStartDate.Value > VietnamNow) && 
-                        (!tournament.StartDate.HasValue || tournament.StartDate.Value > VietnamNow))
-                    {
-                        return NotFound(new { message = $"Race with ID {raceId} was not found." });
-                    }
-                }
+                 return NotFound(new { message = $"Race with ID {raceId} was not found." });
             }
 
             var response = await _resultService.GetPublicResultsByRaceIdAsync(raceId);
@@ -584,34 +378,20 @@ private readonly IRaceResultService _resultService;
         }
     }
 
-[HttpGet("races/live")]
-[AllowAnonymous]
-public async Task<IActionResult> GetLiveRaces()
-{
-    try
+    [HttpGet("races/live")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetLiveRaces()
     {
-        var liveStatuses = new[] { "Live", "Running", "InProgress", "Ongoing" };
-        var liveRaces = await _context.Races
-            .Include(r => r.Round)
-                .ThenInclude(rd => rd.Tournament)
-            .Where(r => liveStatuses.Contains(r.Status))
-            .Select(r => new
-            {
-                RaceId = r.RaceId,
-                RaceName = r.Name,
-                TournamentName = r.Round != null && r.Round.Tournament != null ? r.Round.Tournament.Name : "",
-                StartTime = r.RaceDate,
-                Status = r.Status
-            })
-            .ToListAsync();
-
-        return Ok(new { message = "Live races retrieved successfully", result = liveRaces });
+        try
+        {
+            var liveRaces = await _publicQueryService.GetLiveRacesAsync();
+            return Ok(new { message = "Live races retrieved successfully", result = liveRaces });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred retrieving live races", detail = ex.Message });
+        }
     }
-    catch (Exception ex)
-    {
-        return StatusCode(500, new { message = "An error occurred retrieving live races", detail = ex.Message });
-    }
-}
 
     [HttpPost("tournaments/{id}/generate-races")]
     [AllowAnonymous]

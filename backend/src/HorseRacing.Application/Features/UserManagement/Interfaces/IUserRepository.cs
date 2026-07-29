@@ -20,4 +20,7 @@ public interface IUserRepository
     Task<AppUser?> GetByVerificationTokenAsync(string token);
     Task<int> GetActiveAdminCountAsync();
     Task<bool> HasUpcomingJockeyAssignmentsAsync(int jockeyId);
+    Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId);
+    Task<bool> HasUpcomingRefereeAssignmentsAsync(int refereeId);
+    Task<bool> HasPendingSpectatorDependenciesAsync(int spectatorId);
 }

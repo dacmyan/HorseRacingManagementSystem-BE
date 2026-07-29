@@ -70,12 +70,48 @@ public class JockeyContractRepository : IJockeyContractRepository
     public async Task<bool> HasActiveContractForJockeyInTournamentAsync(int jockeyUserId, long tournamentId)
     {
         return await _context.JockeyContracts
-            .AnyAsync(jc => jc.JockeyId == jockeyUserId 
+            .AnyAsync(jc => jc.Jockey != null && jc.Jockey.UserId == jockeyUserId
+                         && jc.TournamentId == tournamentId
+                         && (jc.Status == "Active" || jc.Status == "Accepted"));
+    }
+
+    public async Task<bool> HasPendingOrActiveContractForHorseInTournamentAsync(long horseId, long tournamentId)
+    {
+        return await _context.JockeyContracts
+            .AnyAsync(jc => jc.HorseId == horseId
+                         && jc.TournamentId == tournamentId
+                         && (jc.Status == "Pending" || jc.Status == "Active" || jc.Status == "Accepted"));
+    }
+
+    public async Task<IEnumerable<JockeyContract>> GetOtherPendingContractsForJockeyInTournamentAsync(int jockeyUserId, long tournamentId, int excludeContractId)
+    {
+        return await _context.JockeyContracts
+            .Where(jc => jc.Jockey != null && jc.Jockey.UserId == jockeyUserId
+                         && jc.TournamentId == tournamentId
+                         && jc.Status == "Pending"
+                         && jc.ContractId != excludeContractId)
+            .ToListAsync();
+    }
+
+    public async Task<bool> HasActiveContractForJockeyAsync(int jockeyId, long tournamentId)
+    {
+        return await _context.JockeyContracts
+            .AnyAsync(jc => jc.JockeyId == jockeyId 
                 && jc.TournamentId == tournamentId 
                 && (jc.Status == "Active" || jc.Status == "Accepted"));
     }
 
-    public async Task<bool> HasPendingOrActiveContractForHorseInTournamentAsync(long horseId, long tournamentId)
+    public async Task<List<int>> GetBusyJockeysForTournamentAsync(long tournamentId)
+    {
+        return await _context.JockeyContracts
+            .Where(jc => jc.TournamentId == tournamentId 
+                && (jc.Status == "Active" || jc.Status == "Accepted" || jc.Status == "Pending"))
+            .Select(jc => jc.JockeyId)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    public async Task<bool> HasActiveContractForHorseAsync(long horseId, long tournamentId)
     {
         return await _context.JockeyContracts
             .AnyAsync(jc => jc.HorseId == horseId 
@@ -91,18 +127,5 @@ public class JockeyContractRepository : IJockeyContractRepository
     public async Task SaveChangesAsync()
     {
         await _context.SaveChangesAsync();
-    }
-
-    public async Task<IEnumerable<JockeyContract>> GetOtherPendingContractsForJockeyInTournamentAsync(int jockeyUserId, long tournamentId, int excludeContractId)
-    {
-        return await _context.JockeyContracts
-            .Include(jc => jc.Horse)
-            .Include(jc => jc.Jockey)
-            .Include(jc => jc.Tournament)
-            .Where(jc => jc.JockeyId == jockeyUserId 
-                && jc.TournamentId == tournamentId 
-                && jc.ContractId != excludeContractId 
-                && jc.Status == "Pending")
-            .ToListAsync();
     }
 }

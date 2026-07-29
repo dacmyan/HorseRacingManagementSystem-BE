@@ -89,8 +89,39 @@ public class UserRepository : IUserRepository
             c.Status == "Active" && 
             c.Tournament != null && 
             (c.Tournament.Status == "PendingRegistration" || 
+             c.Tournament.Status == "PendingScheduling" ||
              c.Tournament.Status == "Pending" || 
              c.Tournament.Status == "Scheduled" || 
              c.Tournament.Status == "InProgress"));
+    }
+
+    public async Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId)
+    {
+        var validStatuses = new[] { "PendingRegistration", "Registration Suspended", "PendingScheduling", "Pending", "Scheduled", "InProgress" };
+        return await _context.Registrations.AnyAsync(r => 
+            r.Horse != null && r.Horse.OwnerId == ownerId &&
+            (r.Status == "Pending" || r.Status == "Approved") &&
+            r.Tournament != null && 
+            validStatuses.Contains(r.Tournament.Status));
+    }
+
+    public async Task<bool> HasUpcomingRefereeAssignmentsAsync(int refereeId)
+    {
+        var validStatuses = new[] { "Upcoming", "Scheduled", "Live", "InProgress", "Running" };
+        return await _context.Set<HorseRacing.Domain.Entities.Tournaments.RaceRefereeAssignment>().AnyAsync(a => 
+            a.RefereeProfile != null && a.RefereeProfile.UserId == refereeId &&
+            a.Race != null &&
+            validStatuses.Contains(a.Race.Status));
+    }
+
+    public async Task<bool> HasPendingSpectatorDependenciesAsync(int spectatorId)
+    {
+        var hasPendingBets = await _context.Set<Bet>().AnyAsync(b =>
+            b.UserId == spectatorId && b.Status == "Pending");
+            
+        var hasPendingWithdrawals = await _context.Set<WalletTransaction>().AnyAsync(t =>
+            t.Wallet != null && t.Wallet.UserId == spectatorId && t.Type == "Withdraw" && t.Status == "Pending");
+
+        return hasPendingBets || hasPendingWithdrawals;
     }
 }

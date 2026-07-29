@@ -505,4 +505,140 @@ public class TournamentRepository : ITournamentRepository
 
         return cancelled;
     }
+    public async Task<int> GetQualifiedHorsesCountAsync(long tournamentId)
+    {
+        var registrations = await _context.Registrations
+            .Include(r => r.MedicalCheckRecords)
+            .Where(r => r.TournamentId == tournamentId && r.Status == "Approved")
+            .ToListAsync();
+        return registrations.Count(r => r.MedicalCheckRecords.Any(check =>
+            (check.MedicalResult == "Pass" || check.MedicalResult == "Passed") &&
+            check.DopingResult != "Positive"));
+    }
+
+    public async Task<List<int>> GetParticipantJockeyUserIdsAsync(long tournamentId)
+    {
+        return await _context.JockeyContracts
+            .Where(c => c.TournamentId == tournamentId && (c.Status == "Accepted" || c.Status == "Active"))
+            .Include(c => c.Jockey)
+            .Where(c => c.Jockey != null)
+            .Select(c => c.Jockey!.UserId)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    public async Task<Tournament?> GetTournamentForCancellationAsync(long tournamentId)
+    {
+        return await _context.Tournaments
+            .Include(t => t.Rounds)
+                .ThenInclude(r => r.Races)
+                    .ThenInclude(r => r.RaceRefereeAssignments)
+                        .ThenInclude(a => a.RefereeProfile)
+            .FirstOrDefaultAsync(t => t.TournamentId == tournamentId);
+    }
+
+    public async Task<List<long>> GetRaceIdsForTournamentAsync(long tournamentId)
+    {
+        return await _context.Rounds
+            .Where(r => r.TournamentId == tournamentId)
+            .SelectMany(r => r.Races)
+            .Select(r => r.RaceId)
+            .ToListAsync();
+    }
+
+    public async Task<bool> HasBetsForRacesAsync(List<long> raceIds)
+    {
+        return await _context.Bets.AnyAsync(b => raceIds.Contains(b.RaceId));
+    }
+
+    public async Task CancelTournamentAndRelatedEntitiesAsync(long tournamentId, List<long> raceIds)
+    {
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament != null)
+        {
+            tournament.Status = "Cancelled";
+        }
+        var registrations = await _context.Registrations.Where(r => r.TournamentId == tournamentId).ToListAsync();
+        foreach (var registration in registrations.Where(r => r.Status is "Pending" or "Approved"))
+            registration.Status = "Cancelled";
+        var races = await _context.Races.Where(r => raceIds.Contains(r.RaceId)).ToListAsync();
+        foreach (var race in races)
+            race.Status = "Cancelled";
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<int>> GetJockeyUserIdsForTournamentAsync(long tournamentId)
+    {
+        return await _context.JockeyContracts
+            .Where(c => c.TournamentId == tournamentId && c.Jockey != null)
+            .Select(c => c.Jockey!.UserId)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    public async Task<List<int>> GetOwnerUserIdsForTournamentAsync(long tournamentId)
+    {
+        return await _context.Registrations
+            .Where(r => r.TournamentId == tournamentId && r.Horse != null)
+            .Select(r => r.Horse!.OwnerId)
+            .Distinct()
+            .ToListAsync();
+    }
+
+    public async Task<Tournament?> GetTournamentWithRoundsAndRacesAsync(long tournamentId)
+    {
+        return await _context.Tournaments
+            .Include(t => t.Rounds)
+                .ThenInclude(r => r.Races)
+            .FirstOrDefaultAsync(t => t.TournamentId == tournamentId);
+    }
+
+    public async Task<List<int>> GetRaceRefereeUserIdsAsync(long raceId)
+    {
+        return await _context.RaceRefereeAssignments
+            .Include(a => a.RefereeProfile)
+            .Where(a => a.RaceId == raceId && a.RefereeProfile != null)
+            .Select(a => a.RefereeProfile!.UserId)
+            .ToListAsync();
+    }
+
+    public async Task<List<HorseRacing.Domain.Entities.RaceResult>> GetRaceResultsForRacesAsync(List<long> raceIds)
+    {
+        return await _context.RaceResults
+            .Where(rr => raceIds.Contains(rr.RaceId))
+            .ToListAsync();
+    }
+
+    public async Task<List<HorseRacing.Domain.Entities.Horse>> GetHorsesByIdsAsync(List<long> horseIds)
+    {
+        return await _context.Horses
+            .Where(h => horseIds.Contains(h.HorseId))
+            .ToListAsync();
+    }
+
+    public async Task<List<HorseRacing.Domain.Entities.JockeyProfile>> GetJockeysByIdsAsync(List<long> jockeyIds)
+    {
+        return await _context.JockeyProfiles
+            .Where(j => jockeyIds.Contains(j.JockeyId))
+            .ToListAsync();
+    }
+
+    public async Task UpdateJockeysAsync(IEnumerable<HorseRacing.Domain.Entities.JockeyProfile> jockeys)
+    {
+        _context.JockeyProfiles.UpdateRange(jockeys);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task UpdateHorsesAsync(IEnumerable<HorseRacing.Domain.Entities.Horse> horses)
+    {
+        _context.Horses.UpdateRange(horses);
+        await _context.SaveChangesAsync();
+    }
+
+    public async Task<List<HorseRacing.Domain.Entities.Financials.Prize>> GetPrizesForTournamentAsync(long tournamentId)
+    {
+        return await _context.Prizes
+            .Where(p => p.TournamentId == tournamentId)
+            .ToListAsync();
+    }
 }

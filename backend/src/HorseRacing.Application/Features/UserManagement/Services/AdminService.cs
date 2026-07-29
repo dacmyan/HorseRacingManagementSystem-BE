@@ -170,10 +170,28 @@ public class AdminService : IAdminService
                 throw new InvalidOperationException("The last active administrator cannot be deactivated.");
         }
 
-        if (user.Role?.Name == "Jockey" && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
         {
-            if (await _userRepository.HasUpcomingJockeyAssignmentsAsync(id))
-                throw new InvalidOperationException("Cannot lock this Jockey because they have upcoming races. Please reassign their active contracts to another Jockey (Late Jockey Change) or scratch the horse before locking.");
+            if (user.Role?.Name == "Jockey")
+            {
+                if (await _userRepository.HasUpcomingJockeyAssignmentsAsync(id))
+                    throw new InvalidOperationException("Cannot lock this Jockey because they have upcoming races. Please reassign their active contracts to another Jockey (Late Jockey Change) or scratch the horse before locking.");
+            }
+            else if (user.Role?.Name == "Owner")
+            {
+                if (await _userRepository.HasUpcomingOwnerAssignmentsAsync(id))
+                    throw new InvalidOperationException("Cannot lock this Owner because they have horses actively registered in upcoming tournaments.");
+            }
+            else if (user.Role?.Name == "Referee")
+            {
+                if (await _userRepository.HasUpcomingRefereeAssignmentsAsync(id))
+                    throw new InvalidOperationException("Cannot lock this Referee because they are assigned to officiate upcoming races.");
+            }
+            else if (user.Role?.Name == "Spectator")
+            {
+                if (await _userRepository.HasPendingSpectatorDependenciesAsync(id))
+                    throw new InvalidOperationException("Cannot lock this Spectator because they have pending bets or pending withdrawal requests.");
+            }
         }
 
         user.Status = string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase) ? "Inactive" : "Active";

@@ -412,17 +412,13 @@ public class JockeyContractService : IJockeyContractService
     {
         var contract = await _contractRepository.GetByIdAsync(contractId);
         if (contract == null)
-        {
-            throw new ArgumentException($"Jockey contract with ID {contractId} not found.");
-        }
+            throw new ArgumentException("Contract not found.");
+
         if (contract.Horse?.OwnerId != ownerUserId)
-        {
-            throw new InvalidOperationException("Access denied. You cannot cancel this contract.");
-        }
-        if (!contract.Status.Equals("Pending", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Only pending contract invitations can be cancelled.");
-        }
+            throw new InvalidOperationException("You can only cancel contracts for your own horses.");
+
+        if (contract.Status != "Pending")
+            throw new InvalidOperationException($"Contract is already {contract.Status} and cannot be cancelled.");
 
         contract.Status = "Cancelled";
         await _contractRepository.SaveChangesAsync();
@@ -464,6 +460,21 @@ public class JockeyContractService : IJockeyContractService
         }
 
         return MapToResponse(contract);
+    }
+
+    public async Task<bool> CheckJockeyBusyAsync(int jockeyId, long tournamentId)
+    {
+        return await _contractRepository.HasActiveContractForJockeyAsync(jockeyId, tournamentId);
+    }
+
+    public async Task<List<int>> GetBusyJockeysForTournamentAsync(long tournamentId)
+    {
+        return await _contractRepository.GetBusyJockeysForTournamentAsync(tournamentId);
+    }
+
+    public async Task<bool> CheckHorseBusyAsync(int horseId, long tournamentId)
+    {
+        return await _contractRepository.HasActiveContractForHorseAsync(horseId, tournamentId);
     }
 
     private async Task CheckAndUpdateExpiredContractsAsync(IEnumerable<JockeyContract> contracts)

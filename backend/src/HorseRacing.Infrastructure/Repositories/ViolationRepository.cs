@@ -49,11 +49,14 @@ public class ViolationRepository : IViolationRepository
     public async Task<List<RaceViolation>> GetViolationsByRaceIdAsync(long raceId)
     {
         return await _context.Violations
-            .AsNoTracking()
             .Include(v => v.Race)
             .Where(v => v.RaceId == raceId)
-            .OrderBy(v => v.Id)
             .ToListAsync();
+    }
+
+    public async Task<RaceViolation?> GetViolationByIdAsync(long violationId)
+    {
+        return await _context.Violations.FindAsync(violationId);
     }
 
     public async Task SaveChangesAsync()

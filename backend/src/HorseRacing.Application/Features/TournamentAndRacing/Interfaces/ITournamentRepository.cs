@@ -44,5 +44,21 @@ public interface ITournamentRepository
     /// </summary>
     Task<List<CancelledRegistrationInfo>> CancelRegistrationsWithoutJockeyAsync(long tournamentId);
     Task<List<CancelledRegistrationInfo>> CancelPendingRegistrationsAsync(long tournamentId);
+    Task<Tournament?> GetTournamentForCancellationAsync(long tournamentId);
+    Task<List<long>> GetRaceIdsForTournamentAsync(long tournamentId);
+    Task<bool> HasBetsForRacesAsync(List<long> raceIds);
+    Task CancelTournamentAndRelatedEntitiesAsync(long tournamentId, List<long> raceIds);
+    Task<List<int>> GetJockeyUserIdsForTournamentAsync(long tournamentId);
+    Task<List<int>> GetOwnerUserIdsForTournamentAsync(long tournamentId);
+    Task<int> GetQualifiedHorsesCountAsync(long tournamentId);
+    Task<List<int>> GetParticipantJockeyUserIdsAsync(long tournamentId);
+    Task<Tournament?> GetTournamentWithRoundsAndRacesAsync(long tournamentId);
+    Task<List<int>> GetRaceRefereeUserIdsAsync(long raceId);
+    Task<List<HorseRacing.Domain.Entities.RaceResult>> GetRaceResultsForRacesAsync(List<long> raceIds);
+    Task<List<HorseRacing.Domain.Entities.Horse>> GetHorsesByIdsAsync(List<long> horseIds);
+    Task<List<HorseRacing.Domain.Entities.JockeyProfile>> GetJockeysByIdsAsync(List<long> jockeyIds);
+    Task UpdateJockeysAsync(IEnumerable<HorseRacing.Domain.Entities.JockeyProfile> jockeys);
+    Task UpdateHorsesAsync(IEnumerable<HorseRacing.Domain.Entities.Horse> horses);
+    Task<List<HorseRacing.Domain.Entities.Financials.Prize>> GetPrizesForTournamentAsync(long tournamentId);
 }
 

@@ -13,14 +13,96 @@ public class RefereeService : IRefereeService
 {
     private readonly IViolationRepository _repository;
     private readonly IRefereeReportRepository _reportRepository;
+    private readonly IRefereeDashboardRepository _dashboardRepository;
 
-    public RefereeService(IViolationRepository repository, IRefereeReportRepository reportRepository)
+    public RefereeService(IViolationRepository repository, IRefereeReportRepository reportRepository, IRefereeDashboardRepository dashboardRepository)
     {
         _repository = repository;
         _reportRepository = reportRepository;
+        _dashboardRepository = dashboardRepository;
     }
 
     private static DateTime VietnamNow => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "SE Asia Standard Time");
+
+    public async Task<long> GetRefereeIdByUserIdAsync(int userId)
+    {
+        var id = await _dashboardRepository.GetRefereeIdByUserIdAsync(userId);
+        if (!id.HasValue) throw new KeyNotFoundException("Referee profile not found for current user.");
+        return id.Value;
+    }
+
+    public async Task<List<ViolationResponse>> GetViolationsAsync(int userId)
+    {
+        var refereeId = await GetRefereeIdByUserIdAsync(userId);
+        return await _dashboardRepository.GetViolationsAsync((int)refereeId);
+    }
+
+    public async Task<List<AssignedRaceDto>> GetAssignedRacesAsync(int userId)
+    {
+        var refereeId = await GetRefereeIdByUserIdAsync(userId);
+        return await _dashboardRepository.GetAssignedRacesAsync((int)refereeId);
+    }
+
+    public async Task<RefereeDashboardDto?> GetDashboardAsync(int userId)
+    {
+        var refereeId = await GetRefereeIdByUserIdAsync(userId);
+        return await _dashboardRepository.GetDashboardAsync((int)refereeId);
+    }
+
+    public async Task<List<HorseCheckDto>> GetHorseChecksAsync(int userId, long raceId)
+    {
+        var refereeId = await GetRefereeIdByUserIdAsync(userId);
+        var isAssigned = await _dashboardRepository.IsRefereeAssignedToRaceAsync((int)refereeId, raceId);
+        if (!isAssigned) throw new InvalidOperationException("Referee is not assigned to this race.");
+
+        return await _dashboardRepository.GetHorseChecksAsync((int)refereeId, raceId);
+    }
+
+    public async Task<ViolationResponse> UpdateViolationAsync(int userId, long violationId, UpdateViolationRequest request)
+    {
+        var refereeId = await GetRefereeIdByUserIdAsync(userId);
+        
+        var violation = await _repository.GetViolationByIdAsync(violationId);
+        if (violation == null) throw new KeyNotFoundException($"Violation with ID {violationId} was not found.");
+
+        var isAssigned = await _dashboardRepository.IsRefereeAssignedToRaceAsync((int)refereeId, violation.RaceId);
+        if (!isAssigned) throw new InvalidOperationException("Referee is not assigned to this race.");
+
+        var race = await _repository.GetRaceByIdAsync(violation.RaceId);
+        if (race != null && new[] { "Finished", "Completed", "Cancelled" }.Contains(race.Status, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Violations cannot be edited while race status is '{race.Status}'.");
+        }
+
+        var allowedPenalties = new[] { "None", "Time Penalty", "Disqualified" };
+        if (!string.IsNullOrWhiteSpace(request.Penalty) && !allowedPenalties.Contains(request.Penalty.Trim(), StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException($"Penalty must be one of: {string.Join(", ", allowedPenalties)}.");
+            
+        if (!string.IsNullOrWhiteSpace(request.Description) && request.Description.Trim().Length > 1000)
+            throw new ArgumentException("Violation description cannot exceed 1000 characters.");
+
+        if (!string.IsNullOrEmpty(request.Penalty))
+        {
+            violation.Penalty = request.Penalty.Trim();
+        }
+        if (!string.IsNullOrEmpty(request.Description))
+        {
+            violation.Description = request.Description.Trim();
+        }
+
+        await _repository.SaveChangesAsync();
+
+        return new ViolationResponse
+        {
+            ViolationId = violation.Id,
+            RaceId = violation.RaceId,
+            RaceName = race?.Name ?? string.Empty,
+            Description = violation.Description,
+            Penalty = violation.Penalty,
+            RefereeId = (int)refereeId,
+            RefereeName = string.Empty // we don't have this right now but it's ok for update response
+        };
+    }
 
     public async Task<ViolationResponse> LogViolationAsync(LogViolationRequest request)
     {
