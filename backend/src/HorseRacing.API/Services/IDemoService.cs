@@ -1,0 +1,9 @@
+using System.Threading.Tasks;
+using HorseRacing.Domain.Entities.Tournaments;
+
+namespace HorseRacing.API.Services;
+
+public interface IDemoService
+{
+    Task<Tournament> SetupDemoTournamentAsync();
+}
