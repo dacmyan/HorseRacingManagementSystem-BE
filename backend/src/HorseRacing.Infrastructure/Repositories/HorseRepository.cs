@@ -50,6 +50,14 @@ public class HorseRepository : IHorseRepository
         _context.Horses.Remove(horse);
     }
 
+    public async Task<bool> HasHistoricalOrActiveDependenciesAsync(long horseId)
+    {
+        return await _context.Registrations.AnyAsync(r => r.HorseId == horseId) ||
+               await _context.JockeyContracts.AnyAsync(c => c.HorseId == horseId) ||
+               await _context.MedicalCheckRecords.AnyAsync(m => m.HorseId == horseId) ||
+               await _context.Set<RaceEntry>().AnyAsync(re => re.Registration != null && re.Registration.HorseId == horseId);
+    }
+
     public async Task SaveChangesAsync()
     {
         await _context.SaveChangesAsync();

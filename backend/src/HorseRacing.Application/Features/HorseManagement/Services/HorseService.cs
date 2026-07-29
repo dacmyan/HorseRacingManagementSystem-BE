@@ -136,6 +136,11 @@ public class HorseService : IHorseService
             throw new InvalidOperationException("Access denied. You do not own this horse.");
         }
 
+        if (await _horseRepository.HasHistoricalOrActiveDependenciesAsync(id))
+        {
+            throw new InvalidOperationException("Cannot delete this horse because it has associated racing history or active contracts. Please consider updating its status instead.");
+        }
+
         _horseRepository.Delete(horse);
         await _horseRepository.SaveChangesAsync();
     }

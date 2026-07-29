@@ -7,6 +7,8 @@ using HorseRacing.Application.Features.ContractAndRegistration.DTOs;
 using HorseRacing.Application.Features.ContractAndRegistration.Interfaces;
 using HorseRacing.Application.Features.FinancialRewards.Interfaces;
 using HorseRacing.Application.Features.FinancialRewards.DTOs;
+using HorseRacing.Application.Features.UserManagement.Interfaces;
+using HorseRacing.Application.Features.UserManagement.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using HorseRacing.Infrastructure.Persistence;
@@ -26,19 +28,22 @@ public class OwnerController : ControllerBase
     private readonly IJockeyContractService _jockeyContractService;
     private readonly IRegistrationService _registrationService;
     private readonly IWalletService _walletService;
+    private readonly IOwnerDashboardService _ownerDashboardService;
 
     public OwnerController(
         IHorseService horseService,
         IHorseDocumentService horseDocumentService,
         IJockeyContractService jockeyContractService,
         IRegistrationService registrationService,
-        IWalletService walletService)
+        IWalletService walletService,
+        IOwnerDashboardService ownerDashboardService)
     {
         _horseService = horseService;
         _horseDocumentService = horseDocumentService;
         _jockeyContractService = jockeyContractService;
         _registrationService = registrationService;
         _walletService = walletService;
+        _ownerDashboardService = ownerDashboardService;
     }
 
     private int GetCurrentUserId()
@@ -217,15 +222,11 @@ public class OwnerController : ControllerBase
     }
 
     [HttpGet("jockeys/{jockeyId:int}/check-busy/{tournamentId:long}")]
-    public async Task<IActionResult> CheckJockeyBusy(int jockeyId, long tournamentId, [FromServices] AppDbContext context)
+    public async Task<IActionResult> CheckJockeyBusy(int jockeyId, long tournamentId)
     {
         try
         {
-            var isBusy = await context.JockeyContracts
-                .AnyAsync(jc => jc.JockeyId == jockeyId 
-                    && jc.TournamentId == tournamentId 
-                    && (jc.Status == "Active" || jc.Status == "Accepted"));
-                    
+            var isBusy = await _jockeyContractService.CheckJockeyBusyAsync(jockeyId, tournamentId);
             return Ok(new { isBusy });
         }
         catch (Exception ex)
@@ -235,17 +236,11 @@ public class OwnerController : ControllerBase
     }
 
     [HttpGet("tournaments/{tournamentId:long}/busy-jockeys")]
-    public async Task<IActionResult> GetBusyJockeysForTournament(long tournamentId, [FromServices] AppDbContext context)
+    public async Task<IActionResult> GetBusyJockeysForTournament(long tournamentId)
     {
         try
         {
-            var busyJockeyIds = await context.JockeyContracts
-                .Where(jc => jc.TournamentId == tournamentId 
-                    && (jc.Status == "Active" || jc.Status == "Accepted" || jc.Status == "Pending"))
-                .Select(jc => jc.JockeyId)
-                .Distinct()
-                .ToListAsync();
-                    
+            var busyJockeyIds = await _jockeyContractService.GetBusyJockeysForTournamentAsync(tournamentId);
             return Ok(new { busyJockeyIds });
         }
         catch (Exception ex)
@@ -256,15 +251,11 @@ public class OwnerController : ControllerBase
 
 
     [HttpGet("horses/{horseId:int}/check-busy/{tournamentId:long}")]
-    public async Task<IActionResult> CheckHorseBusy(int horseId, long tournamentId, [FromServices] AppDbContext context)
+    public async Task<IActionResult> CheckHorseBusy(int horseId, long tournamentId)
     {
         try
         {
-            var isBusy = await context.JockeyContracts
-                .AnyAsync(jc => jc.HorseId == horseId 
-                    && jc.TournamentId == tournamentId 
-                    && (jc.Status == "Pending" || jc.Status == "Active" || jc.Status == "Accepted"));
-                    
+            var isBusy = await _jockeyContractService.CheckHorseBusyAsync(horseId, tournamentId);
             return Ok(new { isBusy });
         }
         catch (Exception ex)
@@ -361,102 +352,13 @@ public class OwnerController : ControllerBase
 
 
     [HttpGet("owner/results")]
-    public async Task<IActionResult> GetOwnerResults([FromServices] AppDbContext context)
+    public async Task<IActionResult> GetOwnerResults()
     {
         try
         {
             var userId = GetCurrentUserId();
-            // Fetch owner's horses
-            var horseIds = await context.Horses
-                .Where(h => h.OwnerId == userId)
-                .Select(h => h.HorseId)
-                .ToListAsync();
-
-            if (!horseIds.Any())
-            {
-                return Ok(new { message = "Results retrieved successfully", result = new List<object>() });
-            }
-
-            // Fetch race entries for these horses
-            var results = await context.RaceEntries
-                .Include(re => re.Race)
-                    .ThenInclude(r => r.Round)
-                        .ThenInclude(r0 => r0.Tournament)
-                .Include(re => re.Registration)
-                    .ThenInclude(reg => reg.Horse)
-                .Where(re => horseIds.Contains(re.Registration.HorseId))
-                .OrderByDescending(re => re.Race != null ? re.Race.RaceDate : DateTime.MinValue)
-                .ToListAsync();
-
-            // Fetch the winners for these races
-            var raceIds = results.Select(re => re.RaceId).Distinct().ToList();
-            var winners = await context.RaceResults
-                .Where(rr => raceIds.Contains(rr.RaceId))
-                .ToDictionaryAsync(rr => rr.RaceId, rr => rr.Winner);
-
-            // Fetch tournament prizes
-            var tournamentIds = results.Select(re => re.Race?.Round?.TournamentId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
-            var prizes = await context.Prizes
-                .Where(p => tournamentIds.Contains(p.TournamentId))
-                .ToListAsync();
-
-            var ownerResults = results.Select(re => {
-                var horseName = re.Registration?.Horse?.Name ?? "";
-                var horseIdStr = re.Registration?.HorseId.ToString() ?? "";
-                var raceStatus = re.Race?.Status ?? "Scheduled";
-                
-                // Determine finish position
-                int finishPosition = re.FinishPosition ?? 0;
-                if (finishPosition == 0 && raceStatus.Equals("Finished", StringComparison.OrdinalIgnoreCase))
-                {
-                    finishPosition = 2; // Default for finished
-                    if (winners.TryGetValue(re.RaceId, out var winner))
-                    {
-                        if (winner.Equals(horseName, StringComparison.OrdinalIgnoreCase) || winner == horseIdStr)
-                        {
-                            finishPosition = 1;
-                        }
-                    }
-                }
-
-                decimal prizeAmount = 0;
-                if (raceStatus.Equals("Finished", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (re.Race?.Round?.RoundNumber == 2)
-                    {
-                        var prize = prizes.FirstOrDefault(p => p.TournamentId == re.Race.Round.TournamentId && p.RankPosition == finishPosition);
-                        if (prize != null)
-                        {
-                            prizeAmount = prize.Amount * (prize.OwnerPercentage / 100m);
-                        }
-                    }
-                    else if (finishPosition == 1)
-                    {
-                        // Fallback legacy support for pre-round winners showing a default win indicator
-                        prizeAmount = 1000000;
-                    }
-                }
-
-                return new {
-                    RaceId = re.RaceId,
-                    RaceName = re.Race?.Name ?? "",
-                    TournamentName = re.Race?.Round?.Tournament?.Name ?? "",
-                    HorseName = horseName,
-                    FinishPosition = finishPosition,
-                    FinishTime = raceStatus.Equals("Finished", StringComparison.OrdinalIgnoreCase)
-                        ? (re.Race?.RaceDate.AddMinutes(5).ToString("HH:mm:ss") ?? "")
-                        : "—",
-                    Point = raceStatus.Equals("Finished", StringComparison.OrdinalIgnoreCase)
-                        ? (finishPosition == 1 ? 10 : 5)
-                        : 0,
-                    PrizeAmount = prizeAmount,
-                    Status = raceStatus,
-                    LaneNo = re.LaneNo,
-                    RaceDate = re.Race != null ? re.Race.RaceDate : (DateTime?)null
-                };
-            }).ToList();
-
-            return Ok(new { message = "Results retrieved successfully", result = ownerResults });
+            var results = await _ownerDashboardService.GetOwnerResultsAsync(userId);
+            return Ok(new { message = "Results retrieved successfully", result = results });
         }
         catch (Exception ex)
         {
@@ -465,64 +367,12 @@ public class OwnerController : ControllerBase
     }
 
     [HttpGet("owner/dashboard")]
-    public async Task<IActionResult> GetOwnerDashboard([FromServices] AppDbContext context)
+    public async Task<IActionResult> GetOwnerDashboard()
     {
         try
         {
             var userId = GetCurrentUserId();
-
-            // Horse count
-            var horseCount = await context.Horses
-                .Where(h => h.OwnerId == userId)
-                .CountAsync();
-
-            // Get horse IDs for this owner
-            var horseIds = await context.Horses
-                .Where(h => h.OwnerId == userId)
-                .Select(h => h.HorseId)
-                .ToListAsync();
-
-            // Registration count
-            var registrationCount = await context.Registrations
-                .Where(r => horseIds.Contains(r.HorseId))
-                .CountAsync();
-
-            // Active race count (races where owner's horses are entered and status is not Finished)
-            var activeRaceCount = await context.RaceEntries
-                .Include(re => re.Race)
-                .Include(re => re.Registration)
-                .Where(re => horseIds.Contains(re.Registration.HorseId)
-                    && re.Race != null
-                    && (re.Race.Status == "Live" || re.Race.Status == "Running" || re.Race.Status == "InProgress"))
-                .Select(re => re.RaceId)
-                .Distinct()
-                .CountAsync();
-
-            // Upcoming race count
-            var upcomingRaceCount = await context.RaceEntries
-                .Include(re => re.Race)
-                .Include(re => re.Registration)
-                .Where(re => horseIds.Contains(re.Registration.HorseId)
-                    && re.Race != null
-                    && re.Race.Status == "Scheduled")
-                .Select(re => re.RaceId)
-                .Distinct()
-                .CountAsync();
-
-            // Total prize amount from payouts
-            var totalPrizeAmount = await context.TournamentPrizePayouts
-                .Where(tpp => tpp.UserId == userId)
-                .SumAsync(tpp => (decimal?)tpp.Amount) ?? 0;
-
-            var dashboard = new
-            {
-                HorseCount = horseCount,
-                RegistrationCount = registrationCount,
-                ActiveRaceCount = activeRaceCount,
-                UpcomingRaceCount = upcomingRaceCount,
-                TotalPrizeAmount = totalPrizeAmount
-            };
-
+            var dashboard = await _ownerDashboardService.GetOwnerDashboardAsync(userId);
             return Ok(new { message = "Owner dashboard retrieved successfully", result = dashboard });
         }
         catch (Exception ex)

@@ -11,6 +11,7 @@ public interface IHorseRepository
     Task AddAsync(Horse horse);
     void Update(Horse horse);
     void Delete(Horse horse);
+    Task<bool> HasHistoricalOrActiveDependenciesAsync(long horseId);
     Task SaveChangesAsync();
 
     // Documents
