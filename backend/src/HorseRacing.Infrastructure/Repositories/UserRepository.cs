@@ -97,6 +97,7 @@ public class UserRepository : IUserRepository
 
     public async Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId)
     {
+
         return await _context.Registrations.AnyAsync(r => 
             r.Horse != null && r.Horse.OwnerId == ownerId &&
             (r.Status == "Pending" || r.Status == "Approved") &&

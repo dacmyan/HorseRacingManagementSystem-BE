@@ -92,6 +92,7 @@ public class DemoService : IDemoService
                 };
                 _context.Registrations.Add(registration);
 
+
                 // Medical Check
                 var medicalCheck = new MedicalCheckRecord
                 {
