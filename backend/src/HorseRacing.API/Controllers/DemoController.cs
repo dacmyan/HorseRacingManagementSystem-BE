@@ -33,11 +33,11 @@ public class DemoController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { Error = ex.Message });
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Error = "An error occurred during demo setup.", Details = ex.Message });
+            return StatusCode(500, new { message = "An error occurred during demo setup.", detail = ex.Message });
         }
     }
 }
