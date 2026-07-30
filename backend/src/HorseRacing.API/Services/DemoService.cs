@@ -67,6 +67,15 @@ public class DemoService : IDemoService
                 throw new InvalidOperationException($"Not enough active jockeys to seed demo. Found {jockeys.Count}, need 12.");
             }
 
+            // 4.5. Fetch one active Veterinarian
+            var vetRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Veterinarian");
+            if (vetRole == null)
+                throw new InvalidOperationException("Veterinarian role not found in database.");
+
+            var vetUser = await _context.Users.FirstOrDefaultAsync(u => u.RoleId == vetRole.RoleId && u.Status == "Active");
+            if (vetUser == null)
+                throw new InvalidOperationException("No active Veterinarian found to perform medical checks.");
+
             // 5. Create Registrations, Medical Checks, and Jockey Contracts
             for (int i = 0; i < 12; i++)
             {
@@ -82,14 +91,13 @@ public class DemoService : IDemoService
                     Status = "Approved"
                 };
                 _context.Registrations.Add(registration);
-                
-                // Save registration to get ID for medical check
-                await _context.SaveChangesAsync();
 
                 // Medical Check
                 var medicalCheck = new MedicalCheckRecord
                 {
-                    RegistrationId = registration.RegistrationId,
+                    Registration = registration,
+                    UserId = vetUser.UserId,
+                    CheckType = "Initial",
                     CheckedAt = DateTime.UtcNow,
                     Temperature = 38.0m,
                     HeartRate = 35,

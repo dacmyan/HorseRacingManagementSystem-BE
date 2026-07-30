@@ -124,9 +124,9 @@ public class OwnerController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            return Forbid(); // 403 Forbidden
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -148,9 +148,9 @@ public class OwnerController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            return Forbid();
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -172,9 +172,9 @@ public class OwnerController : ControllerBase
         {
             return NotFound(new { message = ex.Message });
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            return Forbid();
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {

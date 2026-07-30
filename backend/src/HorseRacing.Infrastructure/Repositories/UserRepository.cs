@@ -97,12 +97,11 @@ public class UserRepository : IUserRepository
 
     public async Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId)
     {
-        var validStatuses = new[] { "PendingRegistration", "Registration Suspended", "PendingScheduling", "Pending", "Scheduled", "InProgress" };
         return await _context.Registrations.AnyAsync(r => 
             r.Horse != null && r.Horse.OwnerId == ownerId &&
             (r.Status == "Pending" || r.Status == "Approved") &&
             r.Tournament != null && 
-            validStatuses.Contains(r.Tournament.Status));
+            !(r.Tournament.Status == "Completed" || r.Tournament.Status == "Cancelled"));
     }
 
     public async Task<bool> HasUpcomingRefereeAssignmentsAsync(int refereeId)
@@ -134,7 +133,7 @@ public class UserRepository : IUserRepository
             if (await HasUpcomingJockeyAssignmentsAsync(userId))
                 blockers.Add("User has active jockey contracts or upcoming races.");
         }
-        else if (role == "Owner")
+        else if (role == "HorseOwner" || role == "Owner")
         {
             if (await HasUpcomingOwnerAssignmentsAsync(userId))
                 blockers.Add("User has horses actively registered in ongoing tournaments.");
