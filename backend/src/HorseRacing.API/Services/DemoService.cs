@@ -27,9 +27,11 @@ public class DemoService : IDemoService
             var tournament = new Tournament
             {
                 Name = "Auto Demo Cup " + Guid.NewGuid().ToString().Substring(0, 8),
+                RegistrationStartDate = DateTime.UtcNow.AddDays(-10),
+                RegistrationEndDate = DateTime.UtcNow.AddDays(-1),
                 StartDate = DateTime.UtcNow.AddDays(1),
                 EndDate = DateTime.UtcNow.AddDays(7),
-                Status = "RegistrationClosed",
+                Status = "PendingScheduling",
                 Description = "Auto-generated demo tournament for presentations."
             };
 

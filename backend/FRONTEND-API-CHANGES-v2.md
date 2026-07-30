@@ -16,7 +16,7 @@ Withdrawing funds now **immediately deducts** the requested amount from the user
 - The UI should display the "Pending" withdrawal transaction in the transaction history so the user knows their funds are reserved but not yet paid out.
 
 ## 2. Wallet Concurrency Control
-**Endpoints:** `/api/spectator/wallet/withdraw`, `/api/owner/wallet/withdraw`, `POST /api/financials/wallet/deposit`, `POST /api/spectator/bets`
+**Endpoints:** `/api/spectator/wallet/withdraw`, `/api/owner/wallet/withdraw`, `POST /api/admin/wallet/deposit` (for system wallet), `POST /api/payments/vnpay/create-deposit` (for users), `POST /api/spectator/bets`
 **What Changed:**
 We introduced EF Core `RowVersion` concurrency checks to prevent race conditions (e.g., users rapidly clicking the deposit/withdraw/bet button).
 - If a concurrent modification is detected, the API will fail fast and return a `400 Bad Request` with the message: _"Your wallet balance was modified by another transaction. Please try again."_
