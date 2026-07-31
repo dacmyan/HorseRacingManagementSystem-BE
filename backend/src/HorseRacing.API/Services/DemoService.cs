@@ -250,4 +250,167 @@ public class DemoService : IDemoService
 
         return tournament;
     }
+
+    public async Task<Tournament> PopulateTournamentAsync(long tournamentId)
+    {
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament == null)
+            throw new InvalidOperationException($"Tournament {tournamentId} not found.");
+
+        var existingRegistrations = await _context.Registrations.CountAsync(r => r.TournamentId == tournamentId);
+        if (existingRegistrations >= 12)
+            throw new InvalidOperationException("Tournament already has 12 or more registrations.");
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            // 3. Fetch exactly 12 random horses that are not deleted
+            var horses = await _context.Horses
+                .Where(h => !h.IsDeleted && h.HealthStatus == "Healthy")
+                .OrderBy(r => Guid.NewGuid())
+                .Take(12)
+                .ToListAsync();
+
+            if (horses.Count < 12)
+            {
+                throw new InvalidOperationException($"Not enough healthy horses to seed demo. Found {horses.Count}, need 12.");
+            }
+
+            var jockeys = await _context.JockeyProfiles
+                .Include(p => p.User)
+                .Where(p => p.User != null && p.User.Status == "Active")
+                .OrderBy(r => Guid.NewGuid())
+                .Take(12)
+                .ToListAsync();
+
+            if (jockeys.Count < 12)
+            {
+                throw new InvalidOperationException($"Chi co {jockeys.Count} nai ngua co ho so, can 12 de dung giai demo.");
+            }
+
+            // 4.5. Fetch one active Veterinarian
+            var vetRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Veterinarian");
+            if (vetRole == null)
+                throw new InvalidOperationException("Veterinarian role not found in database.");
+
+            var vetUser = await _context.Users.FirstOrDefaultAsync(u => u.RoleId == vetRole.RoleId && u.Status == "Active");
+            if (vetUser == null)
+                throw new InvalidOperationException("No active Veterinarian found to perform medical checks.");
+
+            // 4.6 Create Round and Race first to assign Race Entries
+            var round = new Round
+            {
+                TournamentId = tournament.TournamentId,
+                Name = "Finals",
+                RoundNumber = 1,
+                StartDate = tournament.StartDate,
+                EndDate = tournament.EndDate,
+                Status = "Scheduled"
+            };
+            _context.Rounds.Add(round);
+            await _context.SaveChangesAsync();
+
+            var race = new Race
+            {
+                RoundId = round.RoundId,
+                Name = "Auto Demo Race",
+                RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
+                DistanceMeter = 1000,
+                MaxLanes = 12,
+                Status = "Scheduled"
+            };
+            _context.Races.Add(race);
+            await _context.SaveChangesAsync(); // Save to get the RaceId
+
+            // 5. Create Registrations, Medical Checks, Jockey Contracts, and Race Entries
+            for (int i = 0; i < 12; i++)
+            {
+                var horse = horses[i];
+                var jockeyProfile = jockeys[i];
+
+                // Registration
+                var registration = new Registration
+                {
+                    TournamentId = tournament.TournamentId,
+                    HorseId = horse.HorseId,
+                    RegisteredAt = DateTime.UtcNow,
+                    Status = "Approved"
+                };
+                _context.Registrations.Add(registration);
+
+
+                // Medical Check
+                var medicalCheck = new MedicalCheckRecord
+                {
+                    Registration = registration,
+                    UserId = vetUser.UserId,
+                    CheckType = "Initial",
+                    CheckedAt = DateTime.UtcNow,
+                    Temperature = 38.0m,
+                    HeartRate = 35,
+                    Weight = 500.0m,
+                    DopingResult = "Negative",
+                    MedicalResult = "Pass",
+                    Notes = "Auto-passed for demo purposes."
+                };
+                _context.MedicalCheckRecords.Add(medicalCheck);
+
+                // Jockey Contract
+                var contract = new JockeyContract
+                {
+                    TournamentId = tournament.TournamentId,
+                    HorseId = horse.HorseId,
+                    JockeyId = jockeyProfile.UserId,
+                    Status = "Active",
+                    StartDate = DateTime.UtcNow,
+                    EndDate = DateTime.UtcNow.AddDays(10),
+                    InvitationExpiredAt = DateTime.UtcNow.AddDays(1)
+                };
+                _context.JockeyContracts.Add(contract);
+
+                // Race Entry (Leave as Ready for betting)
+                var raceEntry = new RaceEntry
+                {
+                    RaceId = race.RaceId,
+                    Registration = registration,
+                    JockeyId = jockeyProfile.JockeyId,
+                    LaneNo = i + 1,
+                    WinningProbability = 8.33m,
+                    CurrentOdds = 12.0m,
+                    Status = "Ready"
+                };
+                _context.RaceEntries.Add(raceEntry);
+            }
+
+            // 5.5 Assign Referee
+            var refereeRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Referee");
+            var refereeUser = await _context.Users.FirstOrDefaultAsync(u => u.RoleId == refereeRole.RoleId && u.Status == "Active");
+            if (refereeUser == null) throw new InvalidOperationException("No active Referee found.");
+            
+            var refereeProfile = await _context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == refereeUser.UserId);
+            if (refereeProfile == null) throw new InvalidOperationException("No Referee Profile found for the active Referee.");
+
+            var assignment = new RaceRefereeAssignment
+            {
+                RaceId = race.RaceId,
+                RefereeId = refereeProfile.RefereeId,
+                AssignedAt = DateTime.UtcNow,
+                Status = "Assigned"
+            };
+            _context.RaceRefereeAssignments.Add(assignment);
+
+            tournament.Status = "Upcoming";
+
+            // 6. Commit all changes
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return tournament;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
 }

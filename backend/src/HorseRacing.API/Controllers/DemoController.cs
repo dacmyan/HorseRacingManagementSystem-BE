@@ -64,4 +64,28 @@ public class DemoController : ControllerBase
             return StatusCode(500, new { message = "An error occurred during demo resolution.", detail = ex.Message });
         }
     }
+
+    [HttpPost("populate-tournament/{tournamentId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> PopulateTournament(long tournamentId)
+    {
+        try
+        {
+            var tournament = await _demoService.PopulateTournamentAsync(tournamentId);
+            return Ok(new 
+            { 
+                Message = "Tournament populated successfully with 12 entries.", 
+                TournamentId = tournament.TournamentId,
+                Status = tournament.Status 
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred during tournament population.", detail = ex.Message });
+        }
+    }
 }
