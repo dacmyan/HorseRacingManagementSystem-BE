@@ -401,22 +401,6 @@ public class DemoService : IDemoService
                 _context.RaceEntries.Add(raceEntry);
             }
 
-            var refereeRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Referee");
-            var refereeUser = await _context.Users.FirstOrDefaultAsync(u => u.RoleId == refereeRole.RoleId && u.Status == "Active");
-            if (refereeUser == null) throw new InvalidOperationException("No active Referee found.");
-            
-            var refereeProfile = await _context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == refereeUser.UserId);
-            if (refereeProfile == null) throw new InvalidOperationException("No Referee Profile found for the active Referee.");
-
-            var assignment = new RaceRefereeAssignment
-            {
-                RaceId = race.RaceId,
-                RefereeId = refereeProfile.RefereeId,
-                AssignedAt = DateTime.UtcNow,
-                Status = "Assigned"
-            };
-            _context.RaceRefereeAssignments.Add(assignment);
-
             tournament.Status = "Upcoming";
 
             await _context.SaveChangesAsync();
