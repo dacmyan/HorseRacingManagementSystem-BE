@@ -125,6 +125,49 @@ public class DemoService : IDemoService
                 _context.JockeyContracts.Add(contract);
             }
 
+            // 5.5 Create Round, Race and Assign Referee
+            var round = new Round
+            {
+                TournamentId = tournament.TournamentId,
+                Name = "Finals",
+                RoundNumber = 1,
+                StartDate = tournament.StartDate,
+                EndDate = tournament.EndDate,
+                Status = "Scheduled"
+            };
+            _context.Rounds.Add(round);
+            await _context.SaveChangesAsync();
+
+            var race = new Race
+            {
+                RoundId = round.RoundId,
+                Name = "Auto Demo Race",
+                RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
+                DistanceMeter = 1000,
+                MaxLanes = 12,
+                Status = "Scheduled"
+            };
+            _context.Races.Add(race);
+            await _context.SaveChangesAsync(); // Save to get the RaceId
+
+            var refereeRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Referee");
+            var refereeUser = await _context.Users.FirstOrDefaultAsync(u => u.RoleId == refereeRole.RoleId && u.Status == "Active");
+            if (refereeUser == null) throw new InvalidOperationException("No active Referee found.");
+            
+            var refereeProfile = await _context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == refereeUser.UserId);
+            if (refereeProfile == null) throw new InvalidOperationException("No Referee Profile found for the active Referee.");
+
+            var assignment = new RaceRefereeAssignment
+            {
+                RaceId = race.RaceId,
+                RefereeId = refereeProfile.RefereeId,
+                AssignedAt = DateTime.UtcNow,
+                Status = "Assigned"
+            };
+            _context.RaceRefereeAssignments.Add(assignment);
+
+            tournament.Status = "Scheduled";
+
             // 6. Commit all changes
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
