@@ -16,13 +16,15 @@ public class RefereeServiceTests
 {
     private readonly Mock<IViolationRepository> _violationRepoMock;
     private readonly Mock<IRefereeReportRepository> _reportRepoMock;
+    private readonly Mock<IRefereeDashboardRepository> _dashboardRepoMock;
     private readonly RefereeService _service;
 
     public RefereeServiceTests()
     {
         _violationRepoMock = new Mock<IViolationRepository>();
         _reportRepoMock = new Mock<IRefereeReportRepository>();
-        _service = new RefereeService(_violationRepoMock.Object, _reportRepoMock.Object);
+        _dashboardRepoMock = new Mock<IRefereeDashboardRepository>();
+        _service = new RefereeService(_violationRepoMock.Object, _reportRepoMock.Object, _dashboardRepoMock.Object);
     }
 
     [Fact]

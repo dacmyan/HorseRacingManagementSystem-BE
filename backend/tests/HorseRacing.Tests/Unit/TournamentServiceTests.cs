@@ -351,7 +351,7 @@ public class TournamentServiceTests
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*must be at least 1 day apart*");
+            .WithMessage("*must be at least 7 days*");
     }
 
     [Fact]
@@ -388,7 +388,7 @@ public class TournamentServiceTests
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*must be at least 1 day apart*");
+            .WithMessage("*must be at least 7 days*");
     }
 
     [Fact]
@@ -401,8 +401,7 @@ public class TournamentServiceTests
             .ReturnsAsync(new List<CancelledRegistrationInfo>());
         _tournamentRepoMock.Setup(r => r.GetApprovedRegistrationsAsync(tournament.TournamentId))
             .ReturnsAsync(registrations);
-        _tournamentRepoMock.Setup(r => r.GetMedicalCheckRecordsForTournamentAsync(tournament.TournamentId))
-            .ReturnsAsync(BuildPassingMedicalChecks(12));
+
         _tournamentRepoMock.Setup(r => r.CancelPendingRegistrationsAsync(tournament.TournamentId))
             .ReturnsAsync(new List<CancelledRegistrationInfo>
             {
@@ -430,8 +429,7 @@ public class TournamentServiceTests
             });
         _tournamentRepoMock.Setup(r => r.GetApprovedRegistrationsAsync(tournament.TournamentId))
             .ReturnsAsync(BuildRegistrations(11));
-        _tournamentRepoMock.Setup(r => r.GetMedicalCheckRecordsForTournamentAsync(tournament.TournamentId))
-            .ReturnsAsync(BuildPassingMedicalChecks(11));
+
 
         var result = await _service.CloseRegistrationAsync(tournament.TournamentId);
 
@@ -530,7 +528,16 @@ public class TournamentServiceTests
                 RegistrationId = i,
                 TournamentId = 99,
                 HorseId = i,
-                Status = "Approved"
+                Status = "Approved",
+                MedicalCheckRecords = new List<MedicalCheckRecord>
+                {
+                    new()
+                    {
+                        RegistrationId = i,
+                        MedicalResult = "Pass",
+                        DopingResult = "Negative"
+                    }
+                }
             })
             .ToList();
     }

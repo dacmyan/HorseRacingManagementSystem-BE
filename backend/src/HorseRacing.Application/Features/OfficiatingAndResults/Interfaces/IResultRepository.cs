@@ -9,6 +9,7 @@ public interface IResultRepository
 {
     Task<Race?> GetRaceByIdAsync(long raceId);
     Task<RaceResult?> GetResultByRaceIdAsync(long raceId);
+    Task<int?> GetRefereeIdByUserIdAsync(int userId);
     Task<RaceRefereeAssignment?> GetAssignmentAsync(long raceId, int refereeId);
     Task<Horse?> GetHorseByIdOrNameAsync(string identifier);
     Task<RaceEntry?> GetRaceEntryByHorseIdAsync(long raceId, long horseId);

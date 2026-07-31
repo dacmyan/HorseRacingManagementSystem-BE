@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using HorseRacing.API.Services;
 using HorseRacing.Application.Features.UserManagement.Interfaces;
 using HorseRacing.Application.Features.UserManagement.Services;
 using HorseRacing.Application.Common.Interfaces;
@@ -8,6 +9,8 @@ using HorseRacing.Application.Features.BettingEngine.Interfaces;
 using HorseRacing.Application.Features.BettingEngine.Services;
 using HorseRacing.Application.Features.FinancialRewards.Interfaces;
 using HorseRacing.Application.Features.FinancialRewards.Services;
+using HorseRacing.Application.Features.UserManagement.Interfaces;
+using HorseRacing.Application.Features.UserManagement.Services;
 using HorseRacing.Application.Features.Notifications.Interfaces;
 using HorseRacing.Application.Features.Notifications.Services;
 using HorseRacing.Application.Features.HorseManagement.Interfaces;
@@ -47,7 +50,13 @@ public static class ServiceExtensions
         services.AddScoped<IRefereeService, RefereeService>();
         services.AddScoped<IRaceResultService, RaceResultService>();
         services.AddScoped<IPredictionService, PredictionService>();
+        services.AddScoped<IJockeyService, JockeyService>();
+        services.AddScoped<HorseRacing.Application.Features.Public.Interfaces.IPublicQueryService, HorseRacing.Application.Features.Public.Services.PublicQueryService>();
 
+        services.AddScoped<IOwnerDashboardService, OwnerDashboardService>();
+        services.AddScoped<IAdminDashboardService, AdminDashboardService>();
+        services.AddScoped<IAdminActionService, AdminActionService>();
+        services.AddScoped<IDemoService, DemoService>();
         return services;
     }
 }

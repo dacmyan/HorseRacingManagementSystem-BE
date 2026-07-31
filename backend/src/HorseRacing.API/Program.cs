@@ -13,6 +13,7 @@ builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, relo
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddHttpContextAccessor();
 
 // 1. CẤU HÌNH CORS
 builder.Services.AddCors(options =>

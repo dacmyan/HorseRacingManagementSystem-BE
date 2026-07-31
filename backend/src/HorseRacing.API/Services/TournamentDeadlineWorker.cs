@@ -130,8 +130,8 @@ namespace HorseRacing.API.Services
                                             {
                                                 await notificationService.SendNotificationToUserAsync(
                                                     group.Key,
-                                                    "Đăng ký bị hủy tự động",
-                                                    $"Đăng ký của ngựa [{horseNames}] trong giải đấu '{tournamentName}' đã bị hủy tự động do chưa có jockey được chấp nhận khi đăng ký đóng.",
+                                                    "Registration automatically cancelled",
+                                                    $"The registration for horse [{horseNames}] in tournament '{tournamentName}' was automatically cancelled because no jockey was accepted before registration closed.",
                                                     "System",
                                                     (int)tournament.TournamentId,
                                                     actionUrl: "/owner/registrations"

@@ -45,7 +45,13 @@ public static class DependencyInjection
         services.AddScoped<IRefereeReportRepository, RefereeReportRepository>();
         services.AddScoped<IResultRepository, ResultRepository>();
         services.AddScoped<IPredictionRepository, PredictionRepository>();
+        services.AddScoped<IJockeyRepository, JockeyRepository>();
+        services.AddScoped<IRefereeDashboardRepository, RefereeDashboardRepository>();
         services.AddScoped<IMedicalCheckRepository, MedicalCheckRepository>();
+        services.AddScoped<HorseRacing.Application.Features.Public.Interfaces.IPublicQueryRepository, PublicQueryRepository>();
+        services.AddScoped<IOwnerDashboardRepository, OwnerDashboardRepository>();
+        services.AddScoped<IAdminDashboardRepository, AdminDashboardRepository>();
+        services.AddScoped<IAdminActionRepository, AdminActionRepository>();
         services.AddScoped<IMedicalCheckService, MedicalCheckService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();

@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using HorseRacing.Infrastructure.Persistence;
+using HorseRacing.Application.Features.Public.Interfaces;
+using System.Threading.Tasks;
+using System;
 
 namespace HorseRacing.API.Controllers;
 
@@ -7,11 +9,11 @@ namespace HorseRacing.API.Controllers;
 [Route("api/[controller]")]
 public class HealthController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly IPublicQueryService _publicQueryService;
 
-    public HealthController(AppDbContext context)
+    public HealthController(IPublicQueryService publicQueryService)
     {
-        _context = context;
+        _publicQueryService = publicQueryService;
     }
 
     [HttpGet("db")]
@@ -19,7 +21,7 @@ public class HealthController : ControllerBase
     {
         try
         {
-            var canConnect = await _context.Database.CanConnectAsync();
+            var canConnect = await _publicQueryService.CheckDatabaseHealthAsync();
             if (canConnect)
             {
                 return Ok(new { status = "success", message = "Database connected successfully" });

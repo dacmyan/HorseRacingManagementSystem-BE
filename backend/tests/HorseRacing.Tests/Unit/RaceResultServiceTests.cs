@@ -5,10 +5,12 @@ using HorseRacing.Application.Features.OfficiatingAndResults.DTOs;
 using HorseRacing.Application.Features.OfficiatingAndResults.Interfaces;
 using HorseRacing.Application.Features.OfficiatingAndResults.Services;
 using HorseRacing.Domain.Entities;
-using HorseRacing.Domain.Entities.Tournaments;
 using Moq;
 using Xunit;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using HorseRacing.Domain.Entities.Tournaments;
 
 using HorseRacing.Application.Features.FinancialRewards.Interfaces;
 using HorseRacing.Application.Features.BettingEngine.Interfaces;
@@ -25,6 +27,7 @@ public class RaceResultServiceTests
     private readonly Mock<INotificationService> _notificationMock;
     private readonly Mock<IPrizePayoutService> _prizePayoutMock;
     private readonly Mock<ITournamentService> _tournamentMock;
+    private readonly Mock<IHttpContextAccessor> _httpContextAccessorMock;
     private readonly RaceResultService _service;
 
     public RaceResultServiceTests()
@@ -35,13 +38,25 @@ public class RaceResultServiceTests
         _notificationMock = new Mock<INotificationService>();
         _prizePayoutMock = new Mock<IPrizePayoutService>();
         _tournamentMock = new Mock<ITournamentService>();
+        _httpContextAccessorMock = new Mock<IHttpContextAccessor>();
+
+        var claims = new List<Claim> { new Claim("sub", "1") };
+        var identity = new ClaimsIdentity(claims, "TestAuthType");
+        var claimsPrincipal = new ClaimsPrincipal(identity);
+        var httpContext = new DefaultHttpContext { User = claimsPrincipal };
+        _httpContextAccessorMock.Setup(x => x.HttpContext).Returns(httpContext);
+
+        // Also mock the repo call to return a valid refereeId for the user "1"
+        _repoMock.Setup(r => r.GetRefereeIdByUserIdAsync(1)).ReturnsAsync(5);
+
         _service = new RaceResultService(
             _repoMock.Object, 
             _payoutMock.Object, 
             _predictionMock.Object, 
             _notificationMock.Object, 
             _prizePayoutMock.Object,
-            _tournamentMock.Object);
+            _tournamentMock.Object,
+            _httpContextAccessorMock.Object);
     }
 
     [Fact]

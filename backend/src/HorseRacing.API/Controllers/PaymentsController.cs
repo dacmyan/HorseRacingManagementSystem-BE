@@ -58,7 +58,7 @@ public class PaymentsController : ControllerBase
         // Validate Amount >= 10,000 VND
         if (request.Amount < 10000)
         {
-            return BadRequest(new { message = "Số tiền nạp tối thiểu là 10,000 VND." });
+            return BadRequest(new { message = "The minimum deposit amount is 10,000 VND." });
         }
 
         // Retrieve or create User's Wallet

@@ -94,7 +94,14 @@ public class RegistrationService : IRegistrationService
             throw new InvalidOperationException("Registration is closed.");
         }
 
-        // 3. Verify horse is not already registered in this tournament
+        // 3. Verify owner maximum registered horses limit per tournament (Max 3 horses per owner)
+        var ownerHorseCount = await _registrationRepository.CountRegistrationsByOwnerAndTournamentAsync(ownerUserId, request.TournamentId);
+        if (ownerHorseCount >= 3)
+        {
+            throw new InvalidOperationException("You cannot register more than 3 horses for the same tournament.");
+        }
+
+        // 3.1. Verify horse is not already registered in this tournament
         var existing = await _registrationRepository.GetByHorseIdAndTournamentIdAsync(request.HorseId, request.TournamentId);
         if (existing != null)
         {
@@ -111,6 +118,30 @@ public class RegistrationService : IRegistrationService
             }
 
             throw new InvalidOperationException($"Horse '{horse.Name}' is already registered for this tournament.");
+        }
+
+        // 3.1. Verify horse HealthStatus
+        if (horse.HealthStatus == "Injured" || horse.HealthStatus == "Recovering")
+        {
+            throw new InvalidOperationException($"Cannot register horse '{horse.Name}' because its health status is '{horse.HealthStatus}'.");
+        }
+
+        // 3.2. Verify overlapping dates
+        var approvedRegistrations = await _registrationRepository.GetApprovedRegistrationsByHorseIdAsync(horse.HorseId);
+        if (tournament.StartDate.HasValue && tournament.EndDate.HasValue)
+        {
+            foreach (var approvedReg in approvedRegistrations)
+            {
+                var approvedTournament = approvedReg.Tournament;
+                if (approvedTournament != null && approvedTournament.StartDate.HasValue && approvedTournament.EndDate.HasValue)
+                {
+                    bool overlaps = tournament.StartDate <= approvedTournament.EndDate && tournament.EndDate >= approvedTournament.StartDate;
+                    if (overlaps)
+                    {
+                        throw new InvalidOperationException($"Cannot register. The tournament dates ({tournament.StartDate:yyyy-MM-dd} to {tournament.EndDate:yyyy-MM-dd}) overlap with already approved registration for tournament '{approvedTournament.Name}' ({approvedTournament.StartDate:yyyy-MM-dd} to {approvedTournament.EndDate:yyyy-MM-dd}).");
+                    }
+                }
+            }
         }
 
         // 4. Create Registration

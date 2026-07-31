@@ -83,6 +83,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.ToTable("Wallet");
             entity.HasKey(w => w.WalletId);
             entity.Property(w => w.Balance).HasPrecision(18, 2);
+            entity.Property(w => w.RowVersion).IsRowVersion();
             entity.HasOne(w => w.User)
                 .WithOne()
                 .HasForeignKey<Wallet>(w => w.UserId)
@@ -386,6 +387,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasPrecision(10, 2);
             entity.Property(h => h.WinRate)
                 .HasPrecision(5, 2);
+
+            entity.HasQueryFilter(h => !h.IsDeleted);
         });
         modelBuilder.Entity<Race>().ToTable("Race");
         modelBuilder.Entity<RaceResult>(entity =>

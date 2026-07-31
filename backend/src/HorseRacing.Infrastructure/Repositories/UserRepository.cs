@@ -73,6 +73,86 @@ public class UserRepository : IUserRepository
 
     public async Task<AppUser?> GetByVerificationTokenAsync(string token)
     {
-        return await _context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.VerificationToken == token);
+        return await _context.Users.Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.VerificationToken == token);
+    }
+
+    public async Task<int> GetActiveAdminCountAsync()
+    {
+        return await _context.Users.CountAsync(u => u.Role != null && u.Role.Name == "Admin" && u.Status == "Active");
+    }
+
+    public async Task<bool> HasUpcomingJockeyAssignmentsAsync(int jockeyId)
+    {
+        return await _context.JockeyContracts.AnyAsync(c => 
+            c.JockeyId == jockeyId && 
+            c.Status == "Active" && 
+            c.Tournament != null && 
+            !(c.Tournament.Status == "Completed" || c.Tournament.Status == "Cancelled"));
+    }
+
+    public async Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId)
+    {
+
+        return await _context.Registrations.AnyAsync(r => 
+            r.Horse != null && r.Horse.OwnerId == ownerId &&
+            (r.Status == "Pending" || r.Status == "Approved") &&
+            r.Tournament != null && 
+            !(r.Tournament.Status == "Completed" || r.Tournament.Status == "Cancelled"));
+    }
+
+    public async Task<bool> HasUpcomingRefereeAssignmentsAsync(int refereeId)
+    {
+        var validStatuses = new[] { "Upcoming", "Scheduled", "Live", "InProgress", "Running" };
+        return await _context.Set<HorseRacing.Domain.Entities.Tournaments.RaceRefereeAssignment>().AnyAsync(a => 
+            a.RefereeProfile != null && a.RefereeProfile.UserId == refereeId &&
+            a.Race != null &&
+            validStatuses.Contains(a.Race.Status));
+    }
+
+    public async Task<bool> HasPendingSpectatorDependenciesAsync(int spectatorId)
+    {
+        var hasPendingBets = await _context.Set<Bet>().AnyAsync(b =>
+            b.UserId == spectatorId && b.Status == "Pending");
+            
+        var hasPendingWithdrawals = await _context.Set<WalletTransaction>().AnyAsync(t =>
+            t.Wallet != null && t.Wallet.UserId == spectatorId && t.Type == "Withdraw" && t.Status == "Pending");
+
+        return hasPendingBets || hasPendingWithdrawals;
+    }
+
+    public async Task<List<string>> GetLockingConstraintsAsync(int userId, string role)
+    {
+        var blockers = new List<string>();
+
+        if (role == "Jockey")
+        {
+            if (await HasUpcomingJockeyAssignmentsAsync(userId))
+                blockers.Add("User has active jockey contracts or upcoming races.");
+        }
+        else if (role == "HorseOwner" || role == "Owner")
+        {
+            if (await HasUpcomingOwnerAssignmentsAsync(userId))
+                blockers.Add("User has horses actively registered in ongoing tournaments.");
+        }
+        else if (role == "Referee")
+        {
+            if (await HasUpcomingRefereeAssignmentsAsync(userId))
+                blockers.Add("User is assigned to officiate upcoming races.");
+        }
+
+        var wallet = await _context.Set<Wallet>().FirstOrDefaultAsync(w => w.UserId == userId);
+        if (wallet != null && wallet.Balance > 0)
+        {
+            blockers.Add($"User wallet has a positive balance of {wallet.Balance}.");
+        }
+
+        var hasPendingBets = await _context.Set<Bet>().AnyAsync(b => b.UserId == userId && b.Status == "Pending");
+        if (hasPendingBets)
+        {
+            blockers.Add("User has pending bets.");
+        }
+
+        return blockers;
     }
 }

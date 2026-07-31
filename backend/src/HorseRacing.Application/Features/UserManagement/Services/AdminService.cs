@@ -150,4 +150,40 @@ public class AdminService : IAdminService
             CreatedAt = u.CreatedAt
         });
     }
+
+    public async Task<AppUser> UpdateUserStatusAsync(int id, int currentAdminId, bool forceLock = false)
+    {
+        var user = await _userRepository.GetByIdAsync(id);
+        if (user == null)
+        {
+            throw new KeyNotFoundException($"User with ID {id} was not found.");
+        }
+
+        if (id == currentAdminId && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Administrators cannot deactivate their own account.");
+
+        var isAdmin = user.Role?.Name == "Admin";
+        if (isAdmin && string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            var activeAdminCount = await _userRepository.GetActiveAdminCountAsync();
+            if (activeAdminCount <= 1)
+                throw new InvalidOperationException("The last active administrator cannot be deactivated.");
+        }
+
+        if (string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase))
+        {
+            var roleName = user.Role?.Name ?? "";
+            var blockers = await _userRepository.GetLockingConstraintsAsync(id, roleName);
+
+            if (blockers.Any() && !forceLock)
+            {
+                throw new HorseRacing.Domain.Exceptions.LockConstraintException(blockers);
+            }
+        }
+
+        user.Status = string.Equals(user.Status, "Active", StringComparison.OrdinalIgnoreCase) ? "Inactive" : "Active";
+        await _userRepository.SaveChangesAsync();
+
+        return user;
+    }
 }

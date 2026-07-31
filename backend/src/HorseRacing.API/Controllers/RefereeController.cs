@@ -6,9 +6,6 @@ using HorseRacing.Application.Features.OfficiatingAndResults.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using HorseRacing.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
-using System.Linq;
 using System.Security.Claims;
 using HorseRacing.Application.Features.Notifications.Interfaces;
 
@@ -21,34 +18,40 @@ public class RefereeController : ControllerBase
 {
     private readonly IRefereeService _refereeService;
     private readonly IRaceResultService _resultService;
+    private readonly INotificationService _notificationService;
 
-    public RefereeController(IRefereeService refereeService, IRaceResultService resultService)
+    public RefereeController(IRefereeService refereeService, IRaceResultService resultService, INotificationService notificationService)
     {
         _refereeService = refereeService;
         _resultService = resultService;
+        _notificationService = notificationService;
+    }
+
+    private int GetCurrentUserId()
+    {
+        var nameIdentifier = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(nameIdentifier))
+        {
+            nameIdentifier = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
+        }
+        return int.Parse(nameIdentifier ?? "0");
     }
 
     [HttpPost("violations")]
-    public async Task<IActionResult> LogViolation([FromBody] LogViolationRequest request, [FromServices] AppDbContext context, [FromServices] INotificationService notificationService)
+    public async Task<IActionResult> LogViolation([FromBody] LogViolationRequest request)
     {
         try
         {
             var userId = GetCurrentUserId();
-            var referee = await context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == userId);
-            
-            if (referee == null)
-            {
-                return NotFound(new { message = "Referee profile not found for current user." });
-            }
-            
-            request.RefereeId = referee.RefereeId;
+            var refereeId = await _refereeService.GetRefereeIdByUserIdAsync(userId);
+            request.RefereeId = (int)refereeId;
             
             var response = await _refereeService.LogViolationAsync(request);
             try
             {
-                await notificationService.SendNotificationToRoleAsync(
+                await _notificationService.SendNotificationToRoleAsync(
                     "Admin", "New race violation",
-                    $"Referee '{referee.UserId}' recorded a violation for race #{request.RaceId}.",
+                    $"Referee '{userId}' recorded a violation for race #{request.RaceId}.",
                     "Violation", response.ViolationId, actionUrl: "/admin/violations");
             }
             catch (Exception ex)
@@ -56,10 +59,6 @@ public class RefereeController : ControllerBase
                 Console.WriteLine($"[NOTIFICATION ERROR] Failed to notify admins about violation {response.ViolationId}: {ex.Message}");
             }
             return StatusCode(StatusCodes.Status201Created, response);
-        }
-        catch (ArgumentNullException ex)
-        {
-            return BadRequest(new { message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -98,39 +97,17 @@ public class RefereeController : ControllerBase
     }
 
     [HttpGet("violations")]
-    public async Task<IActionResult> GetViolations([FromServices] AppDbContext context)
+    public async Task<IActionResult> GetViolations()
     {
         try
         {
-            // For simplicity and since we don't have a direct Referee -> Violation link easily accessible, 
-            // returning all violations similar to Admin, or just violations for races this referee officiated.
             var userId = GetCurrentUserId();
-            var referee = await context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == userId);
-            
-            if (referee == null)
-            {
-                return NotFound(new { message = "Referee profile not found" });
-            }
-
-            var assignedRaceIds = await context.RaceRefereeAssignments
-                .Where(a => a.RefereeId == referee.RefereeId && a.Status == "Active")
-                .Select(a => a.RaceId)
-                .ToListAsync();
-
-            var violations = await context.Violations
-                .Include(v => v.Race)
-                .Where(v => assignedRaceIds.Contains(v.RaceId))
-                .Select(v => new {
-                    ViolationId = v.Id,
-                    RaceId = v.RaceId,
-                    RaceName = v.Race != null ? v.Race.Name : "",
-                    Type = v.Description.Contains(":") ? v.Description.Split(':', StringSplitOptions.None)[0] : "Violation",
-                    Note = v.Description,
-                    Penalty = v.Penalty
-                })
-                .ToListAsync();
-                
+            var violations = await _refereeService.GetViolationsAsync(userId);
             return Ok(new { message = "Violations retrieved successfully", result = violations });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -139,22 +116,18 @@ public class RefereeController : ControllerBase
     }
 
     [HttpPost("reports")]
-    public async Task<IActionResult> SubmitReport([FromBody] CreateRefereeReportRequest request, [FromServices] AppDbContext context, [FromServices] INotificationService notificationService)
+    public async Task<IActionResult> SubmitReport([FromBody] CreateRefereeReportRequest request)
     {
         try
         {
             var userId = GetCurrentUserId();
-            var referee = await context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == userId);
-            if (referee == null)
-            {
-                return NotFound(new { message = "Referee profile not found for current user." });
-            }
-            request.RefereeId = referee.RefereeId;
+            var refereeId = await _refereeService.GetRefereeIdByUserIdAsync(userId);
+            request.RefereeId = (int)refereeId;
 
             var response = await _refereeService.SubmitReportAsync(request);
             try
             {
-                await notificationService.SendNotificationToRoleAsync(
+                await _notificationService.SendNotificationToRoleAsync(
                     "Admin", "New referee report",
                     $"A referee report was submitted for race #{response.RaceId}.",
                     "System", checked((int)response.ReportId), actionUrl: "/admin/reports");
@@ -164,10 +137,6 @@ public class RefereeController : ControllerBase
                 Console.WriteLine($"[NOTIFICATION ERROR] Failed to notify admins about report {response.ReportId}: {ex.Message}");
             }
             return StatusCode(StatusCodes.Status201Created, response);
-        }
-        catch (ArgumentNullException ex)
-        {
-            return BadRequest(new { message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -188,21 +157,13 @@ public class RefereeController : ControllerBase
     }
 
     [HttpGet("races/{raceId}/reports")]
-    public async Task<IActionResult> GetRaceReports([FromRoute] long raceId, [FromServices] AppDbContext context)
+    public async Task<IActionResult> GetRaceReports([FromRoute] long raceId)
     {
         try
         {
             var userId = GetCurrentUserId();
-            var refereeId = await context.RefereeProfiles
-                .Where(profile => profile.UserId == userId)
-                .Select(profile => (int?)profile.RefereeId)
-                .FirstOrDefaultAsync();
-            if (!refereeId.HasValue)
-                return NotFound(new { message = "Referee profile not found for current user." });
-            var isAssigned = await context.RaceRefereeAssignments.AnyAsync(assignment =>
-                assignment.RaceId == raceId && assignment.RefereeId == refereeId.Value && assignment.Status == "Active");
-            if (!isAssigned)
-                return Forbid();
+            // Validate if the referee is actually assigned to the race
+            var _ = await _refereeService.GetHorseChecksAsync(userId, raceId);
 
             var response = await _refereeService.GetReportsByRaceIdAsync(raceId);
             if (response == null)
@@ -211,6 +172,14 @@ public class RefereeController : ControllerBase
             }
             return Ok(response);
         }
+        catch (InvalidOperationException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
         catch (Exception ex)
         {
             return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred retrieving race reports", detail = ex.Message });
@@ -218,25 +187,14 @@ public class RefereeController : ControllerBase
     }
 
     [HttpPost("races/{raceId}/results")]
-    public async Task<IActionResult> SubmitResultRoute([FromRoute] long raceId, [FromBody] SubmitRaceResultRequest request, [FromServices] AppDbContext context)
+    public async Task<IActionResult> SubmitResultRoute([FromRoute] long raceId, [FromBody] SubmitRaceResultRequest request)
     {
         try
         {
-            var userId = GetCurrentUserId();
-            var referee = await context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == userId);
-            if (referee == null)
-            {
-                return NotFound(new { message = "Referee profile not found for current user." });
-            }
-
             request.RaceId = raceId;
-            request.RefereeId = referee.RefereeId;
+            
             var response = await _resultService.SubmitResultAsync(request);
             return StatusCode(StatusCodes.Status201Created, response);
-        }
-        catch (ArgumentNullException ex)
-        {
-            return BadRequest(new { message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -257,24 +215,12 @@ public class RefereeController : ControllerBase
     }
 
     [HttpPost("results")]
-    public async Task<IActionResult> SubmitResult([FromBody] SubmitRaceResultRequest request, [FromServices] AppDbContext context)
+    public async Task<IActionResult> SubmitResult([FromBody] SubmitRaceResultRequest request)
     {
         try
         {
-            var userId = GetCurrentUserId();
-            var referee = await context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == userId);
-            if (referee == null)
-            {
-                return NotFound(new { message = "Referee profile not found for current user." });
-            }
-
-            request.RefereeId = referee.RefereeId;
             var response = await _resultService.SubmitResultAsync(request);
             return StatusCode(StatusCodes.Status201Created, response);
-        }
-        catch (ArgumentNullException ex)
-        {
-            return BadRequest(new { message = ex.Message });
         }
         catch (ArgumentException ex)
         {
@@ -312,68 +258,18 @@ public class RefereeController : ControllerBase
         }
     }
 
-    private int GetCurrentUserId()
-    {
-        var nameIdentifier = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(nameIdentifier))
-        {
-            nameIdentifier = User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value;
-        }
-        return int.Parse(nameIdentifier ?? "0");
-    }
-
     [HttpGet("dashboard")]
-    public async Task<IActionResult> GetDashboard([FromServices] AppDbContext context)
+    public async Task<IActionResult> GetDashboard()
     {
         try
         {
             var userId = GetCurrentUserId();
-            var referee = await context.RefereeProfiles
-                .FirstOrDefaultAsync(rp => rp.UserId == userId);
-
-            if (referee == null)
-            {
-                return NotFound(new { message = "Referee profile not found" });
-            }
-
-            var assignments = await context.RaceRefereeAssignments
-                .Include(a => a.Race)
-                    .ThenInclude(r => r.Round)
-                .Where(a => a.RefereeId == referee.RefereeId && a.Status == "Active")
-                .ToListAsync();
-
-            var assignmentIds = assignments.Select(a => a.AssignmentId).ToList();
-
-            var reports = await context.RefereeReports
-                .Where(r => assignmentIds.Contains(r.AssignmentId))
-                .ToListAsync();
-
-            var completedAssignmentIds = reports.Select(report => report.AssignmentId).Distinct().ToHashSet();
-            var completedReportCount = reports.Count;
-            var pendingReportCount = assignments.Count(assignment => !completedAssignmentIds.Contains(assignment.AssignmentId));
-            
-            var assignedRaceIds = assignments.Select(a => a.RaceId).ToList();
-            var violationsCreatedCount = await context.Violations
-                .Where(v => assignedRaceIds.Contains(v.RaceId))
-                .CountAsync();
-
-            var assignedRaces = assignments.Select(a => new {
-                RaceId = a.RaceId,
-                RaceName = a.Race?.Name ?? "",
-                RaceDate = a.Race?.RaceDate,
-                Status = a.Race?.Status ?? "Scheduled",
-                TournamentId = a.Race?.Round?.TournamentId
-            }).ToList();
-
-            var result = new {
-                AssignedRaceCount = assignments.Count,
-                PendingReportCount = pendingReportCount,
-                CompletedReportCount = completedReportCount,
-                ViolationsCreatedCount = violationsCreatedCount,
-                AssignedRaces = assignedRaces
-            };
-
+            var result = await _refereeService.GetDashboardAsync(userId);
             return Ok(new { message = "Referee dashboard retrieved successfully", result = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -382,43 +278,21 @@ public class RefereeController : ControllerBase
     }
 
     [HttpGet("races/{raceId}/horse-checks")]
-    public async Task<IActionResult> GetHorseChecks(long raceId, [FromServices] AppDbContext context)
+    public async Task<IActionResult> GetHorseChecks(long raceId)
     {
         try
         {
             var userId = GetCurrentUserId();
-            var refereeId = await context.RefereeProfiles
-                .Where(profile => profile.UserId == userId)
-                .Select(profile => (int?)profile.RefereeId)
-                .FirstOrDefaultAsync();
-            if (!refereeId.HasValue)
-                return NotFound(new { message = "Referee profile not found for current user." });
-            var isAssigned = await context.RaceRefereeAssignments.AnyAsync(assignment =>
-                assignment.RaceId == raceId && assignment.RefereeId == refereeId.Value && assignment.Status == "Active");
-            if (!isAssigned)
-                return Forbid();
-
-            var entries = await context.RaceEntries
-                .Include(re => re.Registration)
-                    .ThenInclude(reg => reg.Horse)
-                        .ThenInclude(h => h.Owner)
-                .Include(re => re.JockeyProfile)
-                    .ThenInclude(jp => jp.User)
-                .Where(re => re.RaceId == raceId)
-                .ToListAsync();
-
-            var horseChecks = entries.Select(re => new {
-                RaceEntryId = re.RaceEntryId,
-                HorseId = re.Registration?.HorseId ?? 0,
-                HorseName = re.Registration?.Horse?.Name ?? "",
-                OwnerName = re.Registration?.Horse?.Owner?.FullName ?? "",
-                JockeyName = re.JockeyProfile?.User?.FullName ?? "",
-                LaneNo = re.LaneNo,
-                MedicalStatus = re.Registration?.Horse?.HealthStatus ?? "Good",
-                Status = re.Status
-            }).ToList();
-
+            var horseChecks = await _refereeService.GetHorseChecksAsync(userId, raceId);
             return Ok(new { message = "Horse checks retrieved successfully", result = horseChecks });
+        }
+        catch (InvalidOperationException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -427,50 +301,29 @@ public class RefereeController : ControllerBase
     }
 
     [HttpPut("violations/{id}")]
-    public async Task<IActionResult> UpdateViolation(long id, [FromBody] UpdateViolationRequest request, [FromServices] AppDbContext context)
+    public async Task<IActionResult> UpdateViolation(long id, [FromBody] UpdateViolationRequest request)
     {
         try
         {
-            var violation = await context.Violations.FindAsync(id);
-            if (violation == null)
-            {
-                return NotFound(new { message = $"Violation with ID {id} was not found." });
-            }
-
             var userId = GetCurrentUserId();
-            var refereeId = await context.RefereeProfiles
-                .Where(profile => profile.UserId == userId)
-                .Select(profile => (int?)profile.RefereeId)
-                .FirstOrDefaultAsync();
-            if (!refereeId.HasValue)
-                return NotFound(new { message = "Referee profile not found for current user." });
-            var isAssigned = await context.RaceRefereeAssignments.AnyAsync(assignment =>
-                assignment.RaceId == violation.RaceId && assignment.RefereeId == refereeId.Value && assignment.Status == "Active");
-            if (!isAssigned)
-                return Forbid();
-
-            var raceStatus = await context.Races.Where(race => race.RaceId == violation.RaceId).Select(race => race.Status).FirstOrDefaultAsync();
-            if (new[] { "Finished", "Completed", "Cancelled" }.Contains(raceStatus, StringComparer.OrdinalIgnoreCase))
-                return BadRequest(new { message = $"Violations cannot be edited while race status is '{raceStatus}'." });
-
-            var allowedPenalties = new[] { "None", "Time Penalty", "Disqualified" };
-            if (!string.IsNullOrWhiteSpace(request.Penalty) && !allowedPenalties.Contains(request.Penalty.Trim(), StringComparer.OrdinalIgnoreCase))
-                return BadRequest(new { message = $"Penalty must be one of: {string.Join(", ", allowedPenalties)}." });
-            if (!string.IsNullOrWhiteSpace(request.Description) && request.Description.Trim().Length > 1000)
-                return BadRequest(new { message = "Violation description cannot exceed 1000 characters." });
-
-            if (!string.IsNullOrEmpty(request.Penalty))
-            {
-                violation.Penalty = request.Penalty.Trim();
-            }
-            if (!string.IsNullOrEmpty(request.Description))
-            {
-                violation.Description = request.Description.Trim();
-            }
-
-            await context.SaveChangesAsync();
-
+            var violation = await _refereeService.UpdateViolationAsync(userId, id, request);
             return Ok(new { message = "Violation updated successfully", result = violation });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not assigned"))
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {

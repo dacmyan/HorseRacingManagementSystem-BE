@@ -18,4 +18,10 @@ public interface IUserRepository
     Task AddRefereeProfileAsync(RefereeProfile profile);
     Task AddWalletAsync(Wallet wallet);
     Task<AppUser?> GetByVerificationTokenAsync(string token);
+    Task<int> GetActiveAdminCountAsync();
+    Task<bool> HasUpcomingJockeyAssignmentsAsync(int jockeyId);
+    Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId);
+    Task<bool> HasUpcomingRefereeAssignmentsAsync(int refereeId);
+    Task<bool> HasPendingSpectatorDependenciesAsync(int spectatorId);
+    Task<List<string>> GetLockingConstraintsAsync(int userId, string role);
 }

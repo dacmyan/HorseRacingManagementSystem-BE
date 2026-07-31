@@ -7,6 +7,8 @@ public class ViolationResponse
     public string RaceName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string Penalty { get; set; } = string.Empty;
-    public int? RefereeId { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public long? RefereeId { get; set; }
     public string? RefereeName { get; set; }
 }
