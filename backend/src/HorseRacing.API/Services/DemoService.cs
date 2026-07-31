@@ -78,7 +78,7 @@ public class DemoService : IDemoService
             var round = new Round
             {
                 TournamentId = tournament.TournamentId,
-                Name = "Finals",
+                Name = "Final Round",
                 RoundNumber = 1,
                 StartDate = tournament.StartDate,
                 EndDate = tournament.EndDate,
@@ -197,17 +197,25 @@ public class DemoService : IDemoService
         if (tournament == null)
             throw new InvalidOperationException($"Tournament {tournamentId} not found.");
 
-        var race = await _context.Races.FirstOrDefaultAsync(r => r.Round != null && r.Round.TournamentId == tournamentId);
-        if (race == null)
-            throw new InvalidOperationException("No race found for this tournament.");
+        var rounds = await _context.Rounds.Where(r => r.TournamentId == tournamentId).ToListAsync();
+        var races = await _context.Races.Where(r => r.Round != null && r.Round.TournamentId == tournamentId).ToListAsync();
 
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            race.Status = "Active";
-            race.RaceDate = DateTime.UtcNow;
             tournament.Status = "Active";
             tournament.StartDate = DateTime.UtcNow;
+
+            foreach (var round in rounds)
+            {
+                round.Status = "Active";
+            }
+
+            foreach (var race in races)
+            {
+                race.Status = "Active";
+                race.RaceDate = DateTime.UtcNow;
+            }
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -337,7 +345,7 @@ public class DemoService : IDemoService
                 var round = new Round
                 {
                     TournamentId = tournament.TournamentId,
-                    Name = "Finals",
+                    Name = "Final Round",
                     RoundNumber = 1,
                     StartDate = tournament.StartDate,
                     EndDate = tournament.EndDate,
@@ -382,7 +390,7 @@ public class DemoService : IDemoService
                 var round = new Round
                 {
                     TournamentId = tournament.TournamentId,
-                    Name = "Preliminary",
+                    Name = "Prefinal Round",
                     RoundNumber = 1,
                     StartDate = tournament.StartDate,
                     EndDate = tournament.EndDate,
@@ -399,7 +407,7 @@ public class DemoService : IDemoService
                     var race = new Race
                     {
                         RoundId = round.RoundId,
-                        Name = $"Preliminary Heat {i + 1}",
+                        Name = $"Prefinal Race {i + 1}",
                         RaceDate = (tournament.StartDate ?? DateTime.UtcNow.AddDays(1)).AddHours(i),
                         DistanceMeter = 1000,
                         MaxLanes = 12,
