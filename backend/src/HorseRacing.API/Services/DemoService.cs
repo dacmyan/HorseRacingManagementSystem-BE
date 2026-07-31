@@ -327,52 +327,106 @@ public class DemoService : IDemoService
             // Save to ensure new registrations get their IDs
             await _context.SaveChangesAsync();
 
-            // Consolidate and Create Race
-            var round = new Round
-            {
-                TournamentId = tournament.TournamentId,
-                Name = "Finals",
-                RoundNumber = 1,
-                StartDate = tournament.StartDate,
-                EndDate = tournament.EndDate,
-                Status = "Scheduled"
-            };
-            _context.Rounds.Add(round);
-            await _context.SaveChangesAsync();
-
-            var race = new Race
-            {
-                RoundId = round.RoundId,
-                Name = "Auto Demo Race",
-                RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
-                DistanceMeter = 1000,
-                MaxLanes = 12,
-                Status = "Scheduled"
-            };
-            _context.Races.Add(race);
-            await _context.SaveChangesAsync(); 
-
+            // Consolidate and Create Race(s)
             var allRegistrations = existingRegistrations.Concat(newRegistrations).ToList();
             var allContracts = await _context.JockeyContracts.Where(c => c.TournamentId == tournament.TournamentId).ToListAsync();
             var allProfiles = await _context.JockeyProfiles.ToListAsync();
 
-            int lane = 1;
-            foreach (var reg in allRegistrations)
+            if (allRegistrations.Count <= 12)
             {
-                var contract = allContracts.FirstOrDefault(c => c.HorseId == reg.HorseId);
-                var profile = allProfiles.FirstOrDefault(p => p.UserId == contract?.JockeyId);
-
-                var raceEntry = new RaceEntry
+                var round = new Round
                 {
-                    RaceId = race.RaceId,
-                    RegistrationId = reg.RegistrationId,
-                    JockeyId = profile?.JockeyId, // Nullable, safe fallback if user didn't assign a contract
-                    LaneNo = lane++,
-                    WinningProbability = 8.33m,
-                    CurrentOdds = 12.0m,
-                    Status = "Ready"
+                    TournamentId = tournament.TournamentId,
+                    Name = "Finals",
+                    RoundNumber = 1,
+                    StartDate = tournament.StartDate,
+                    EndDate = tournament.EndDate,
+                    Status = "Scheduled"
                 };
-                _context.RaceEntries.Add(raceEntry);
+                _context.Rounds.Add(round);
+                await _context.SaveChangesAsync();
+
+                var race = new Race
+                {
+                    RoundId = round.RoundId,
+                    Name = "Auto Demo Race",
+                    RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
+                    DistanceMeter = 1000,
+                    MaxLanes = 12,
+                    Status = "Scheduled"
+                };
+                _context.Races.Add(race);
+                await _context.SaveChangesAsync(); 
+
+                int lane = 1;
+                foreach (var reg in allRegistrations)
+                {
+                    var contract = allContracts.FirstOrDefault(c => c.HorseId == reg.HorseId);
+                    var profile = allProfiles.FirstOrDefault(p => p.UserId == contract?.JockeyId);
+
+                    var raceEntry = new RaceEntry
+                    {
+                        RaceId = race.RaceId,
+                        RegistrationId = reg.RegistrationId,
+                        JockeyId = profile?.JockeyId, // Nullable, safe fallback if user didn't assign a contract
+                        LaneNo = lane++,
+                        WinningProbability = 8.33m,
+                        CurrentOdds = 12.0m,
+                        Status = "Ready"
+                    };
+                    _context.RaceEntries.Add(raceEntry);
+                }
+            }
+            else
+            {
+                var round = new Round
+                {
+                    TournamentId = tournament.TournamentId,
+                    Name = "Preliminary",
+                    RoundNumber = 1,
+                    StartDate = tournament.StartDate,
+                    EndDate = tournament.EndDate,
+                    Status = "Scheduled"
+                };
+                _context.Rounds.Add(round);
+                await _context.SaveChangesAsync();
+
+                int raceCount = (int)Math.Ceiling(allRegistrations.Count / 12.0);
+                for (int i = 0; i < raceCount; i++)
+                {
+                    var raceRegistrations = allRegistrations.Skip(i * 12).Take(12).ToList();
+                    
+                    var race = new Race
+                    {
+                        RoundId = round.RoundId,
+                        Name = $"Preliminary Heat {i + 1}",
+                        RaceDate = (tournament.StartDate ?? DateTime.UtcNow.AddDays(1)).AddHours(i),
+                        DistanceMeter = 1000,
+                        MaxLanes = 12,
+                        Status = "Scheduled"
+                    };
+                    _context.Races.Add(race);
+                    await _context.SaveChangesAsync();
+                    
+                    int lane = 1;
+                    foreach (var reg in raceRegistrations)
+                    {
+                        var contract = allContracts.FirstOrDefault(c => c.HorseId == reg.HorseId);
+                        var profile = allProfiles.FirstOrDefault(p => p.UserId == contract?.JockeyId);
+
+                        var raceEntry = new RaceEntry
+                        {
+                            RaceId = race.RaceId,
+                            RegistrationId = reg.RegistrationId,
+                            JockeyId = profile?.JockeyId,
+                            LaneNo = lane++,
+                            WinningProbability = 8.33m,
+                            CurrentOdds = 12.0m,
+                            Status = "Ready"
+                        };
+                        _context.RaceEntries.Add(raceEntry);
+                    }
+                }
             }
 
             tournament.Status = "Upcoming";
