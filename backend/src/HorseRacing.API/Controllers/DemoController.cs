@@ -41,16 +41,16 @@ public class DemoController : ControllerBase
         }
     }
 
-    [HttpPost("resolve-race/{tournamentId}")]
+    [HttpPost("start-race/{tournamentId}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> ResolveDemoTournament(long tournamentId)
+    public async Task<IActionResult> StartDemoTournament(long tournamentId)
     {
         try
         {
-            var tournament = await _demoService.ResolveDemoTournamentAsync(tournamentId);
+            var tournament = await _demoService.StartDemoTournamentAsync(tournamentId);
             return Ok(new 
             { 
-                Message = "Demo tournament resolved successfully. Betting payouts triggered.", 
+                Message = "Demo tournament started successfully. Ready for manual referee input.", 
                 TournamentId = tournament.TournamentId,
                 Status = tournament.Status 
             });
@@ -67,14 +67,14 @@ public class DemoController : ControllerBase
 
     [HttpPost("populate-tournament/{tournamentId}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> PopulateTournament(long tournamentId)
+    public async Task<IActionResult> PopulateTournament(long tournamentId, [FromQuery] int count)
     {
         try
         {
-            var tournament = await _demoService.PopulateTournamentAsync(tournamentId);
+            var tournament = await _demoService.PopulateTournamentAsync(tournamentId, count);
             return Ok(new 
             { 
-                Message = "Tournament populated successfully with 12 entries.", 
+                Message = $"Tournament populated successfully with {count} entries.", 
                 TournamentId = tournament.TournamentId,
                 Status = tournament.Status 
             });
@@ -86,6 +86,30 @@ public class DemoController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { message = "An error occurred during tournament population.", detail = ex.Message });
+        }
+    }
+
+    [HttpPost("start-single-race/{raceId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> StartSingleRace(long raceId)
+    {
+        try
+        {
+            var race = await _demoService.StartSingleRaceAsync(raceId);
+            return Ok(new 
+            { 
+                Message = "Single race started successfully. Ready for manual referee input.", 
+                RaceId = race.RaceId,
+                Status = race.Status 
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred during single race resolution.", detail = ex.Message });
         }
     }
 }
