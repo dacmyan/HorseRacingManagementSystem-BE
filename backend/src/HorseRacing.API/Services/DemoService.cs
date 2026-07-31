@@ -234,8 +234,8 @@ public class DemoService : IDemoService
         if (count <= 0)
             throw new InvalidOperationException("Count must be greater than 0.");
 
-        if (existingRegistrations.Count + count > 12)
-            throw new InvalidOperationException($"Cannot add {count} horses. Tournament already has {existingRegistrations.Count} registrations and maximum capacity is 12.");
+        if (existingRegistrations.Count + count > 48)
+            throw new InvalidOperationException($"Cannot add {count} horses. Tournament already has {existingRegistrations.Count} registrations and maximum capacity is 48.");
 
         int slotsNeeded = count;
 
