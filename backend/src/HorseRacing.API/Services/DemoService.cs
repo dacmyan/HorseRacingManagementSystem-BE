@@ -142,7 +142,7 @@ public class DemoService : IDemoService
                 };
                 _context.JockeyContracts.Add(contract);
 
-                // Race Entry
+                // Race Entry (Simulate finished race)
                 var raceEntry = new RaceEntry
                 {
                     RaceId = race.RaceId,
@@ -151,7 +151,9 @@ public class DemoService : IDemoService
                     LaneNo = i + 1,
                     WinningProbability = 8.33m,
                     CurrentOdds = 12.0m,
-                    Status = "Ready"
+                    FinishPosition = i + 1,
+                    FinishTime = 80m + (decimal)i * 0.5m, // 80.0, 80.5, 81.0, etc.
+                    Status = "Finished"
                 };
                 _context.RaceEntries.Add(raceEntry);
             }
@@ -173,7 +175,18 @@ public class DemoService : IDemoService
             };
             _context.RaceRefereeAssignments.Add(assignment);
 
-            tournament.Status = "Upcoming";
+            // 5.8 Add Race Result
+            var raceResult = new RaceResult
+            {
+                RaceId = race.RaceId,
+                Winner = horses[0].Name // Lane 1 horse is the winner
+            };
+            _context.RaceResults.Add(raceResult);
+
+            // Fast-forward statuses
+            race.Status = "Completed";
+            tournament.Status = "AwaitingResults";
+            tournament.EndDate = DateTime.UtcNow.AddMinutes(-10);
 
             // 6. Commit all changes
             await _context.SaveChangesAsync();
