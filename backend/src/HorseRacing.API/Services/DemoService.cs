@@ -414,4 +414,57 @@ public class DemoService : IDemoService
             throw;
         }
     }
+
+    public async Task<Race> ResolveSingleRaceAsync(long raceId)
+    {
+        var race = await _context.Races.FindAsync(raceId);
+        if (race == null)
+            throw new InvalidOperationException($"Race {raceId} not found.");
+
+        var entries = await _context.RaceEntries
+            .Include(re => re.Registration!)
+                .ThenInclude(reg => reg.Horse)
+            .Where(re => re.RaceId == race.RaceId)
+            .OrderBy(e => e.LaneNo)
+            .ToListAsync();
+
+        if (!entries.Any())
+            throw new InvalidOperationException("No entries found for this race.");
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                entry.FinishPosition = i + 1;
+                entry.FinishTime = 80m + (decimal)i * 0.5m;
+                entry.Status = "Finished";
+            }
+
+            var winnerHorse = entries[0].Registration?.Horse?.Name ?? "Demo Winner";
+
+            var raceResult = new RaceResult
+            {
+                RaceId = race.RaceId,
+                Winner = winnerHorse
+            };
+            _context.RaceResults.Add(raceResult);
+
+            race.Status = "Completed";
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+
+        // Trigger betting payouts after transaction commits
+        await _betPayoutService.ProcessPayoutAsync(race.RaceId);
+
+        return race;
+    }
 }

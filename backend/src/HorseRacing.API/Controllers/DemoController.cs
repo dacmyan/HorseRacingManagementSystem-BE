@@ -88,4 +88,28 @@ public class DemoController : ControllerBase
             return StatusCode(500, new { message = "An error occurred during tournament population.", detail = ex.Message });
         }
     }
+
+    [HttpPost("resolve-single-race/{raceId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ResolveSingleRace(long raceId)
+    {
+        try
+        {
+            var race = await _demoService.ResolveSingleRaceAsync(raceId);
+            return Ok(new 
+            { 
+                Message = "Single race resolved successfully. Betting payouts triggered.", 
+                RaceId = race.RaceId,
+                Status = race.Status 
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "An error occurred during single race resolution.", detail = ex.Message });
+        }
+    }
 }

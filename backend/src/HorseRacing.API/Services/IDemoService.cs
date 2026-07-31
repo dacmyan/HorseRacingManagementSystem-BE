@@ -8,4 +8,5 @@ public interface IDemoService
     Task<Tournament> SetupDemoTournamentAsync();
     Task<Tournament> ResolveDemoTournamentAsync(long tournamentId);
     Task<Tournament> PopulateTournamentAsync(long tournamentId);
+    Task<Race> ResolveSingleRaceAsync(long raceId);
 }
