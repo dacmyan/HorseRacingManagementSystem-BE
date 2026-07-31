@@ -5,16 +5,19 @@ using HorseRacing.Domain.Entities;
 using HorseRacing.Domain.Entities.Tournaments;
 using HorseRacing.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using HorseRacing.Application.Features.FinancialRewards.Interfaces;
 
 namespace HorseRacing.API.Services;
 
 public class DemoService : IDemoService
 {
     private readonly AppDbContext _context;
+    private readonly IBetPayoutService _betPayoutService;
 
-    public DemoService(AppDbContext context)
+    public DemoService(AppDbContext context, IBetPayoutService betPayoutService)
     {
         _context = context;
+        _betPayoutService = betPayoutService;
     }
 
     public async Task<Tournament> SetupDemoTournamentAsync()
@@ -142,7 +145,7 @@ public class DemoService : IDemoService
                 };
                 _context.JockeyContracts.Add(contract);
 
-                // Race Entry (Simulate finished race)
+                // Race Entry (Leave as Ready for betting)
                 var raceEntry = new RaceEntry
                 {
                     RaceId = race.RaceId,
@@ -151,9 +154,7 @@ public class DemoService : IDemoService
                     LaneNo = i + 1,
                     WinningProbability = 8.33m,
                     CurrentOdds = 12.0m,
-                    FinishPosition = i + 1,
-                    FinishTime = 80m + (decimal)i * 0.5m, // 80.0, 80.5, 81.0, etc.
-                    Status = "Finished"
+                    Status = "Ready"
                 };
                 _context.RaceEntries.Add(raceEntry);
             }
@@ -175,18 +176,7 @@ public class DemoService : IDemoService
             };
             _context.RaceRefereeAssignments.Add(assignment);
 
-            // 5.8 Add Race Result
-            var raceResult = new RaceResult
-            {
-                RaceId = race.RaceId,
-                Winner = horses[0].Name // Lane 1 horse is the winner
-            };
-            _context.RaceResults.Add(raceResult);
-
-            // Fast-forward statuses
-            race.Status = "Completed";
-            tournament.Status = "AwaitingResults";
-            tournament.EndDate = DateTime.UtcNow.AddMinutes(-10);
+            tournament.Status = "Upcoming";
 
             // 6. Commit all changes
             await _context.SaveChangesAsync();
@@ -199,5 +189,65 @@ public class DemoService : IDemoService
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    public async Task<Tournament> ResolveDemoTournamentAsync(long tournamentId)
+    {
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament == null)
+            throw new InvalidOperationException($"Tournament {tournamentId} not found.");
+
+        var race = await _context.Races.FirstOrDefaultAsync(r => r.Round != null && r.Round.TournamentId == tournamentId);
+        if (race == null)
+            throw new InvalidOperationException("No race found for this tournament.");
+
+        var entries = await _context.RaceEntries
+            .Include(re => re.Registration!)
+                .ThenInclude(reg => reg.Horse)
+            .Where(re => re.RaceId == race.RaceId)
+            .OrderBy(e => e.LaneNo)
+            .ToListAsync();
+
+        if (!entries.Any())
+            throw new InvalidOperationException("No entries found for this race.");
+
+        using var transaction = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            
+            for (int i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                entry.FinishPosition = i + 1;
+                entry.FinishTime = 80m + (decimal)i * 0.5m;
+                entry.Status = "Finished";
+            }
+
+            var winnerHorse = entries[0].Registration?.Horse?.Name ?? "Demo Winner";
+
+            var raceResult = new RaceResult
+            {
+                RaceId = race.RaceId,
+                Winner = winnerHorse
+            };
+            _context.RaceResults.Add(raceResult);
+
+            race.Status = "Completed";
+            tournament.Status = "Completed";
+            tournament.EndDate = DateTime.UtcNow.AddMinutes(-10);
+
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+
+        // Trigger betting payouts after transaction commits
+        await _betPayoutService.ProcessPayoutAsync(race.RaceId);
+
+        return tournament;
     }
 }
