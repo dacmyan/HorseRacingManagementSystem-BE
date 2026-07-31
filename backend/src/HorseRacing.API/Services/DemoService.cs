@@ -69,6 +69,11 @@ public class DemoService : IDemoService
                 throw new InvalidOperationException($"Not enough active jockeys to seed demo. Found {jockeys.Count}, need 12.");
             }
 
+            var jockeyUserIds = jockeys.Select(j => j.UserId).ToList();
+            var jockeyProfiles = await _context.JockeyProfiles
+                .Where(jp => jockeyUserIds.Contains(jp.UserId))
+                .ToListAsync();
+
             // 4.5. Fetch one active Veterinarian
             var vetRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Veterinarian");
             if (vetRole == null)
@@ -78,11 +83,37 @@ public class DemoService : IDemoService
             if (vetUser == null)
                 throw new InvalidOperationException("No active Veterinarian found to perform medical checks.");
 
-            // 5. Create Registrations, Medical Checks, and Jockey Contracts
+            // 4.6 Create Round and Race first to assign Race Entries
+            var round = new Round
+            {
+                TournamentId = tournament.TournamentId,
+                Name = "Finals",
+                RoundNumber = 1,
+                StartDate = tournament.StartDate,
+                EndDate = tournament.EndDate,
+                Status = "Scheduled"
+            };
+            _context.Rounds.Add(round);
+            await _context.SaveChangesAsync();
+
+            var race = new Race
+            {
+                RoundId = round.RoundId,
+                Name = "Auto Demo Race",
+                RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
+                DistanceMeter = 1000,
+                MaxLanes = 12,
+                Status = "Scheduled"
+            };
+            _context.Races.Add(race);
+            await _context.SaveChangesAsync(); // Save to get the RaceId
+
+            // 5. Create Registrations, Medical Checks, Jockey Contracts, and Race Entries
             for (int i = 0; i < 12; i++)
             {
                 var horse = horses[i];
                 var jockey = jockeys[i];
+                var jockeyProfile = jockeyProfiles.FirstOrDefault(jp => jp.UserId == jockey.UserId);
 
                 // Registration
                 var registration = new Registration
@@ -123,33 +154,25 @@ public class DemoService : IDemoService
                     InvitationExpiredAt = DateTime.UtcNow.AddDays(1)
                 };
                 _context.JockeyContracts.Add(contract);
+
+                // Race Entry
+                if (jockeyProfile != null)
+                {
+                    var raceEntry = new RaceEntry
+                    {
+                        RaceId = race.RaceId,
+                        Registration = registration,
+                        JockeyId = jockeyProfile.JockeyId,
+                        LaneNo = i + 1,
+                        WinningProbability = 8.33m,
+                        CurrentOdds = 12.0m,
+                        Status = "Ready"
+                    };
+                    _context.RaceEntries.Add(raceEntry);
+                }
             }
 
-            // 5.5 Create Round, Race and Assign Referee
-            var round = new Round
-            {
-                TournamentId = tournament.TournamentId,
-                Name = "Finals",
-                RoundNumber = 1,
-                StartDate = tournament.StartDate,
-                EndDate = tournament.EndDate,
-                Status = "Scheduled"
-            };
-            _context.Rounds.Add(round);
-            await _context.SaveChangesAsync();
-
-            var race = new Race
-            {
-                RoundId = round.RoundId,
-                Name = "Auto Demo Race",
-                RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
-                DistanceMeter = 1000,
-                MaxLanes = 12,
-                Status = "Scheduled"
-            };
-            _context.Races.Add(race);
-            await _context.SaveChangesAsync(); // Save to get the RaceId
-
+            // 5.5 Assign Referee
             var refereeRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Referee");
             var refereeUser = await _context.Users.FirstOrDefaultAsync(u => u.RoleId == refereeRole.RoleId && u.Status == "Active");
             if (refereeUser == null) throw new InvalidOperationException("No active Referee found.");
