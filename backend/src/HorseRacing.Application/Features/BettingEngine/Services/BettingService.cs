@@ -64,10 +64,15 @@ public class BettingService : IBettingService
             throw new ArgumentException("Bet amount must be greater than zero.");
         }
 
-        var minBetAmount = _configuration.GetValue<decimal>("BettingSettings:MinimumAmount", 10000m);
+        var minBetAmount = _configuration.GetValue<decimal>("BettingSettings:MinimumAmount", 5.0m);
+        var maxBetAmount = _configuration.GetValue<decimal>("BettingSettings:MaximumAmount", 1000.0m);
         if (request.Amount < minBetAmount)
         {
-            throw new ArgumentException($"Bet amount must be at least {minBetAmount:N0}.");
+            throw new ArgumentException($"Bet amount must be at least ${minBetAmount:N2} USD.");
+        }
+        if (request.Amount > maxBetAmount)
+        {
+            throw new ArgumentException($"Bet amount cannot exceed ${maxBetAmount:N2} USD.");
         }
 
         var entry = await _betRepository.GetRaceEntryByIdAsync(request.RaceEntryId);
