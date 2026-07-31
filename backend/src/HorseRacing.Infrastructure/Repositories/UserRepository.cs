@@ -88,11 +88,7 @@ public class UserRepository : IUserRepository
             c.JockeyId == jockeyId && 
             c.Status == "Active" && 
             c.Tournament != null && 
-            (c.Tournament.Status == "PendingRegistration" || 
-             c.Tournament.Status == "PendingScheduling" ||
-             c.Tournament.Status == "Pending" || 
-             c.Tournament.Status == "Scheduled" || 
-             c.Tournament.Status == "InProgress"));
+            !(c.Tournament.Status == "Completed" || c.Tournament.Status == "Cancelled"));
     }
 
     public async Task<bool> HasUpcomingOwnerAssignmentsAsync(int ownerId)
