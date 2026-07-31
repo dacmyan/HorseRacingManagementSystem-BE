@@ -90,7 +90,7 @@ public class DemoService : IDemoService
             var race = new Race
             {
                 RoundId = round.RoundId,
-                Name = "Auto Demo Race",
+                Name = "FinalRace",
                 RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
                 DistanceMeter = 1000,
                 MaxLanes = 12,
@@ -357,7 +357,7 @@ public class DemoService : IDemoService
                 var race = new Race
                 {
                     RoundId = round.RoundId,
-                    Name = "Auto Demo Race",
+                    Name = "FinalRace",
                     RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
                     DistanceMeter = 1000,
                     MaxLanes = 12,
