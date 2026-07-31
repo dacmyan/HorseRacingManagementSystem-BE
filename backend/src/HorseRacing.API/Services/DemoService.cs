@@ -191,7 +191,7 @@ public class DemoService : IDemoService
         }
     }
 
-    public async Task<Tournament> ResolveDemoTournamentAsync(long tournamentId)
+    public async Task<Tournament> StartDemoTournamentAsync(long tournamentId)
     {
         var tournament = await _context.Tournaments.FindAsync(tournamentId);
         if (tournament == null)
@@ -201,40 +201,13 @@ public class DemoService : IDemoService
         if (race == null)
             throw new InvalidOperationException("No race found for this tournament.");
 
-        var entries = await _context.RaceEntries
-            .Include(re => re.Registration!)
-                .ThenInclude(reg => reg.Horse)
-            .Where(re => re.RaceId == race.RaceId)
-            .OrderBy(e => e.LaneNo)
-            .ToListAsync();
-
-        if (!entries.Any())
-            throw new InvalidOperationException("No entries found for this race.");
-
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            
-            for (int i = 0; i < entries.Count; i++)
-            {
-                var entry = entries[i];
-                entry.FinishPosition = i + 1;
-                entry.FinishTime = 80m + (decimal)i * 0.5m;
-                entry.Status = "Finished";
-            }
-
-            var winnerHorse = entries[0].Registration?.Horse?.Name ?? "Demo Winner";
-
-            var raceResult = new RaceResult
-            {
-                RaceId = race.RaceId,
-                Winner = winnerHorse
-            };
-            _context.RaceResults.Add(raceResult);
-
-            race.Status = "Completed";
-            tournament.Status = "Completed";
-            tournament.EndDate = DateTime.UtcNow.AddMinutes(-10);
+            race.Status = "Active";
+            race.RaceDate = DateTime.UtcNow;
+            tournament.Status = "Active";
+            tournament.StartDate = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -244,9 +217,6 @@ public class DemoService : IDemoService
             await transaction.RollbackAsync();
             throw;
         }
-
-        // Trigger betting payouts after transaction commits
-        await _betPayoutService.ProcessPayoutAsync(race.RaceId);
 
         return tournament;
     }
@@ -415,43 +385,17 @@ public class DemoService : IDemoService
         }
     }
 
-    public async Task<Race> ResolveSingleRaceAsync(long raceId)
+    public async Task<Race> StartSingleRaceAsync(long raceId)
     {
         var race = await _context.Races.FindAsync(raceId);
         if (race == null)
             throw new InvalidOperationException($"Race {raceId} not found.");
 
-        var entries = await _context.RaceEntries
-            .Include(re => re.Registration!)
-                .ThenInclude(reg => reg.Horse)
-            .Where(re => re.RaceId == race.RaceId)
-            .OrderBy(e => e.LaneNo)
-            .ToListAsync();
-
-        if (!entries.Any())
-            throw new InvalidOperationException("No entries found for this race.");
-
         using var transaction = await _context.Database.BeginTransactionAsync();
         try
         {
-            for (int i = 0; i < entries.Count; i++)
-            {
-                var entry = entries[i];
-                entry.FinishPosition = i + 1;
-                entry.FinishTime = 80m + (decimal)i * 0.5m;
-                entry.Status = "Finished";
-            }
-
-            var winnerHorse = entries[0].Registration?.Horse?.Name ?? "Demo Winner";
-
-            var raceResult = new RaceResult
-            {
-                RaceId = race.RaceId,
-                Winner = winnerHorse
-            };
-            _context.RaceResults.Add(raceResult);
-
-            race.Status = "Completed";
+            race.Status = "Active";
+            race.RaceDate = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -461,9 +405,6 @@ public class DemoService : IDemoService
             await transaction.RollbackAsync();
             throw;
         }
-
-        // Trigger betting payouts after transaction commits
-        await _betPayoutService.ProcessPayoutAsync(race.RaceId);
 
         return race;
     }

@@ -41,16 +41,16 @@ public class DemoController : ControllerBase
         }
     }
 
-    [HttpPost("resolve-race/{tournamentId}")]
+    [HttpPost("start-race/{tournamentId}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> ResolveDemoTournament(long tournamentId)
+    public async Task<IActionResult> StartDemoTournament(long tournamentId)
     {
         try
         {
-            var tournament = await _demoService.ResolveDemoTournamentAsync(tournamentId);
+            var tournament = await _demoService.StartDemoTournamentAsync(tournamentId);
             return Ok(new 
             { 
-                Message = "Demo tournament resolved successfully. Betting payouts triggered.", 
+                Message = "Demo tournament started successfully. Ready for manual referee input.", 
                 TournamentId = tournament.TournamentId,
                 Status = tournament.Status 
             });
@@ -89,16 +89,16 @@ public class DemoController : ControllerBase
         }
     }
 
-    [HttpPost("resolve-single-race/{raceId}")]
+    [HttpPost("start-single-race/{raceId}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> ResolveSingleRace(long raceId)
+    public async Task<IActionResult> StartSingleRace(long raceId)
     {
         try
         {
-            var race = await _demoService.ResolveSingleRaceAsync(raceId);
+            var race = await _demoService.StartSingleRaceAsync(raceId);
             return Ok(new 
             { 
-                Message = "Single race resolved successfully. Betting payouts triggered.", 
+                Message = "Single race started successfully. Ready for manual referee input.", 
                 RaceId = race.RaceId,
                 Status = race.Status 
             });
