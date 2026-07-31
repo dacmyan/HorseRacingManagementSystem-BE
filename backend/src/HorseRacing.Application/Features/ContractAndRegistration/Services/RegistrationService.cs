@@ -94,7 +94,14 @@ public class RegistrationService : IRegistrationService
             throw new InvalidOperationException("Registration is closed.");
         }
 
-        // 3. Verify horse is not already registered in this tournament
+        // 3. Verify owner maximum registered horses limit per tournament (Max 3 horses per owner)
+        var ownerHorseCount = await _registrationRepository.CountRegistrationsByOwnerAndTournamentAsync(ownerUserId, request.TournamentId);
+        if (ownerHorseCount >= 3)
+        {
+            throw new InvalidOperationException("You cannot register more than 3 horses for the same tournament.");
+        }
+
+        // 3.1. Verify horse is not already registered in this tournament
         var existing = await _registrationRepository.GetByHorseIdAndTournamentIdAsync(request.HorseId, request.TournamentId);
         if (existing != null)
         {

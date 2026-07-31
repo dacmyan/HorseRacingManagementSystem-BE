@@ -45,6 +45,17 @@ public class RegistrationRepository : IRegistrationRepository
             .ToListAsync();
     }
 
+    public async Task<int> CountRegistrationsByOwnerAndTournamentAsync(int ownerUserId, long tournamentId)
+    {
+        return await _context.Registrations
+            .Where(r => r.TournamentId == tournamentId && 
+                         r.Horse != null && 
+                         r.Horse.OwnerId == ownerUserId && 
+                         r.Status != "Cancelled" && 
+                         r.Status != "Rejected")
+            .CountAsync();
+    }
+
     public async Task<IEnumerable<Registration>> GetApprovedRegistrationsByHorseIdAsync(long horseId)
     {
         return await _context.Registrations
