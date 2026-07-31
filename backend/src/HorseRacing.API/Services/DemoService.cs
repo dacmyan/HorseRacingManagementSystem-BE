@@ -221,7 +221,7 @@ public class DemoService : IDemoService
         return tournament;
     }
 
-    public async Task<Tournament> PopulateTournamentAsync(long tournamentId)
+    public async Task<Tournament> PopulateTournamentAsync(long tournamentId, int count)
     {
         var tournament = await _context.Tournaments.FindAsync(tournamentId);
         if (tournament == null)
@@ -231,9 +231,13 @@ public class DemoService : IDemoService
             .Where(r => r.TournamentId == tournamentId && r.Status == "Approved")
             .ToListAsync();
 
-        int slotsNeeded = 12 - existingRegistrations.Count;
-        if (slotsNeeded <= 0)
-            throw new InvalidOperationException("Tournament already has 12 or more registrations.");
+        if (count <= 0)
+            throw new InvalidOperationException("Count must be greater than 0.");
+
+        if (existingRegistrations.Count + count > 12)
+            throw new InvalidOperationException($"Cannot add {count} horses. Tournament already has {existingRegistrations.Count} registrations and maximum capacity is 12.");
+
+        int slotsNeeded = count;
 
         using var transaction = await _context.Database.BeginTransactionAsync();
         try

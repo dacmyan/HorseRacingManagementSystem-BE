@@ -67,14 +67,14 @@ public class DemoController : ControllerBase
 
     [HttpPost("populate-tournament/{tournamentId}")]
     [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> PopulateTournament(long tournamentId)
+    public async Task<IActionResult> PopulateTournament(long tournamentId, [FromQuery] int count)
     {
         try
         {
-            var tournament = await _demoService.PopulateTournamentAsync(tournamentId);
+            var tournament = await _demoService.PopulateTournamentAsync(tournamentId, count);
             return Ok(new 
             { 
-                Message = "Tournament populated successfully with 12 entries.", 
+                Message = $"Tournament populated successfully with {count} entries.", 
                 TournamentId = tournament.TournamentId,
                 Status = tournament.Status 
             });
