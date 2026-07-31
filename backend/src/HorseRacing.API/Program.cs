@@ -103,24 +103,24 @@ app.MapControllers();
 app.MapHub<HorseRacing.API.Hubs.NotificationHub>("/hubs/notification");
 
 // 4. MIGRATION & SEEDING (Tự động cập nhật Database)
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    var logger = services.GetRequiredService<ILogger<Program>>();
-    try
-    {
-        logger.LogInformation("Checking database migrations...");
-        var db = services.GetRequiredService<AppDbContext>();
-        // await db.Database.MigrateAsync();
-        logger.LogInformation("Database migration check skipped.");
+// using (var scope = app.Services.CreateScope())
+// {
+//     var services = scope.ServiceProvider;
+//     var logger = services.GetRequiredService<ILogger<Program>>();
+//     try
+//     {
+//         logger.LogInformation("Checking database migrations...");
+//         var db = services.GetRequiredService<AppDbContext>();
+//         // await db.Database.MigrateAsync();
+//         logger.LogInformation("Database migration check skipped.");
 
-        // var dataSeeder = services.GetRequiredService<HorseRacing.Infrastructure.Persistence.DataSeeder>();
-        // await dataSeeder.SeedAsync();
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "An error occurred during database migration or seeding. Continuing startup...");
-    }
-}
+//         // var dataSeeder = services.GetRequiredService<HorseRacing.Infrastructure.Persistence.DataSeeder>();
+//         // await dataSeeder.SeedAsync();
+//     }
+//     catch (Exception ex)
+//     {
+//         logger.LogError(ex, "An error occurred during database migration or seeding. Continuing startup...");
+//     }
+// }
 
 app.Run();
