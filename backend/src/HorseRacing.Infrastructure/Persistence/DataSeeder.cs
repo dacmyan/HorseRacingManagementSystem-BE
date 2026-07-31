@@ -615,6 +615,27 @@ public class DataSeeder
             suJockeys.Add(jockey);
         }
 
+        // 3.5. Ensure all seeded Jockeys have a JockeyProfile (fixes corrupted data)
+        var jockeysWithoutProfile = await _context.Users
+            .Where(u => u.RoleId == 3 && !_context.JockeyProfiles.Any(jp => jp.UserId == u.UserId))
+            .ToListAsync();
+
+        if (jockeysWithoutProfile.Any())
+        {
+            foreach (var j in jockeysWithoutProfile)
+            {
+                _context.JockeyProfiles.Add(new JockeyProfile
+                {
+                    UserId = j.UserId,
+                    ExperienceYears = 3,
+                    RankingPoint = 0,
+                    Status = "Active"
+                });
+            }
+            await _context.SaveChangesAsync();
+            _logger.LogInformation($"Created missing JockeyProfiles for {jockeysWithoutProfile.Count} jockeys.");
+        }
+
         // 4. Helper function to seed a tournament with N entries
         async Task SeedSingleSUTournament(string tourName, int count)
         {

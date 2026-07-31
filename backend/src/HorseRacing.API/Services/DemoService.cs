@@ -50,29 +50,17 @@ public class DemoService : IDemoService
                 throw new InvalidOperationException($"Not enough healthy horses to seed demo. Found {horses.Count}, need 12.");
             }
 
-            // 4. Fetch exactly 12 random Jockeys
-            // Assuming Jockeys are users with a specific RoleId. Let's find RoleId for Jockey.
-            var jockeyRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Jockey");
-            if (jockeyRole == null)
-            {
-                throw new InvalidOperationException("Jockey role not found in database.");
-            }
-
-            var jockeys = await _context.Users
-                .Where(u => u.RoleId == jockeyRole.RoleId && u.Status == "Active")
+            var jockeys = await _context.JockeyProfiles
+                .Include(p => p.User)
+                .Where(p => p.User != null && p.User.Status == "Active")
                 .OrderBy(r => Guid.NewGuid())
                 .Take(12)
                 .ToListAsync();
 
             if (jockeys.Count < 12)
             {
-                throw new InvalidOperationException($"Not enough active jockeys to seed demo. Found {jockeys.Count}, need 12.");
+                throw new InvalidOperationException($"Chi co {jockeys.Count} nai ngua co ho so, can 12 de dung giai demo.");
             }
-
-            var jockeyUserIds = jockeys.Select(j => j.UserId).ToList();
-            var jockeyProfiles = await _context.JockeyProfiles
-                .Where(jp => jockeyUserIds.Contains(jp.UserId))
-                .ToListAsync();
 
             // 4.5. Fetch one active Veterinarian
             var vetRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Veterinarian");
@@ -112,8 +100,7 @@ public class DemoService : IDemoService
             for (int i = 0; i < 12; i++)
             {
                 var horse = horses[i];
-                var jockey = jockeys[i];
-                var jockeyProfile = jockeyProfiles.FirstOrDefault(jp => jp.UserId == jockey.UserId);
+                var jockeyProfile = jockeys[i];
 
                 // Registration
                 var registration = new Registration
@@ -147,7 +134,7 @@ public class DemoService : IDemoService
                 {
                     TournamentId = tournament.TournamentId,
                     HorseId = horse.HorseId,
-                    JockeyId = jockey.UserId,
+                    JockeyId = jockeyProfile.UserId,
                     Status = "Active",
                     StartDate = DateTime.UtcNow,
                     EndDate = DateTime.UtcNow.AddDays(10),
@@ -156,20 +143,17 @@ public class DemoService : IDemoService
                 _context.JockeyContracts.Add(contract);
 
                 // Race Entry
-                if (jockeyProfile != null)
+                var raceEntry = new RaceEntry
                 {
-                    var raceEntry = new RaceEntry
-                    {
-                        RaceId = race.RaceId,
-                        Registration = registration,
-                        JockeyId = jockeyProfile.JockeyId,
-                        LaneNo = i + 1,
-                        WinningProbability = 8.33m,
-                        CurrentOdds = 12.0m,
-                        Status = "Ready"
-                    };
-                    _context.RaceEntries.Add(raceEntry);
-                }
+                    RaceId = race.RaceId,
+                    Registration = registration,
+                    JockeyId = jockeyProfile.JockeyId,
+                    LaneNo = i + 1,
+                    WinningProbability = 8.33m,
+                    CurrentOdds = 12.0m,
+                    Status = "Ready"
+                };
+                _context.RaceEntries.Add(raceEntry);
             }
 
             // 5.5 Assign Referee
@@ -189,7 +173,7 @@ public class DemoService : IDemoService
             };
             _context.RaceRefereeAssignments.Add(assignment);
 
-            tournament.Status = "Scheduled";
+            tournament.Status = "Upcoming";
 
             // 6. Commit all changes
             await _context.SaveChangesAsync();
