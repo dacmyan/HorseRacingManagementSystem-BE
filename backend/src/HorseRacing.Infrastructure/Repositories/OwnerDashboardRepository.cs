@@ -138,12 +138,6 @@ public class OwnerDashboardRepository : IOwnerDashboardRepository
                         prizeAmount = prize.Amount * (prize.OwnerPercentage / 100m);
                     }
                 }
-                else if (finishPosition == 1)
-                {
-                    // TODO: Revisit this legacy logic. We should rely on TournamentPrizePayouts instead.
-                    // Fallback legacy support for pre-round winners showing a default win indicator
-                    prizeAmount = 1000000;
-                }
             }
 
             return new OwnerResultDto {
