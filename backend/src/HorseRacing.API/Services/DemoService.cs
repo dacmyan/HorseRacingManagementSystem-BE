@@ -74,32 +74,7 @@ public class DemoService : IDemoService
             if (vetUser == null)
                 throw new InvalidOperationException("No active Veterinarian found to perform medical checks.");
 
-            // 4.6 Create Round and Race first to assign Race Entries
-            var round = new Round
-            {
-                TournamentId = tournament.TournamentId,
-                Name = "Final Round",
-                RoundNumber = 1,
-                StartDate = tournament.StartDate,
-                EndDate = tournament.EndDate,
-                Status = "Scheduled"
-            };
-            _context.Rounds.Add(round);
-            await _context.SaveChangesAsync();
-
-            var race = new Race
-            {
-                RoundId = round.RoundId,
-                Name = "FinalRace",
-                RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
-                DistanceMeter = 1000,
-                MaxLanes = 12,
-                Status = "Scheduled"
-            };
-            _context.Races.Add(race);
-            await _context.SaveChangesAsync(); // Save to get the RaceId
-
-            // 5. Create Registrations, Medical Checks, Jockey Contracts, and Race Entries
+            // 5. Create Registrations, Medical Checks, and Jockey Contracts
             for (int i = 0; i < 12; i++)
             {
                 var horse = horses[i];
@@ -114,7 +89,6 @@ public class DemoService : IDemoService
                     Status = "Approved"
                 };
                 _context.Registrations.Add(registration);
-
 
                 // Medical Check
                 var medicalCheck = new MedicalCheckRecord
@@ -144,39 +118,7 @@ public class DemoService : IDemoService
                     InvitationExpiredAt = DateTime.UtcNow.AddDays(1)
                 };
                 _context.JockeyContracts.Add(contract);
-
-                // Race Entry (Leave as Ready for betting)
-                var raceEntry = new RaceEntry
-                {
-                    RaceId = race.RaceId,
-                    Registration = registration,
-                    JockeyId = jockeyProfile.JockeyId,
-                    LaneNo = i + 1,
-                    WinningProbability = 8.33m,
-                    CurrentOdds = 12.0m,
-                    Status = "Ready"
-                };
-                _context.RaceEntries.Add(raceEntry);
             }
-
-            // 5.5 Assign Referee
-            var refereeRole = await _context.Roles.FirstOrDefaultAsync(r => r.Name == "Referee");
-            var refereeUser = await _context.Users.FirstOrDefaultAsync(u => u.RoleId == refereeRole.RoleId && u.Status == "Active");
-            if (refereeUser == null) throw new InvalidOperationException("No active Referee found.");
-            
-            var refereeProfile = await _context.RefereeProfiles.FirstOrDefaultAsync(rp => rp.UserId == refereeUser.UserId);
-            if (refereeProfile == null) throw new InvalidOperationException("No Referee Profile found for the active Referee.");
-
-            var assignment = new RaceRefereeAssignment
-            {
-                RaceId = race.RaceId,
-                RefereeId = refereeProfile.RefereeId,
-                AssignedAt = DateTime.UtcNow,
-                Status = "Assigned"
-            };
-            _context.RaceRefereeAssignments.Add(assignment);
-
-            tournament.Status = "Upcoming";
 
             // 6. Commit all changes
             await _context.SaveChangesAsync();
@@ -333,134 +275,6 @@ public class DemoService : IDemoService
             }
 
             // Save to ensure new registrations get their IDs
-            await _context.SaveChangesAsync();
-
-            // Consolidate and Create Race(s)
-            var allRegistrations = existingRegistrations.Concat(newRegistrations).ToList();
-            var allContracts = await _context.JockeyContracts.Where(c => c.TournamentId == tournament.TournamentId).ToListAsync();
-            var allProfiles = await _context.JockeyProfiles.ToListAsync();
-
-            // Delete existing rounds and their races to avoid duplicates when re-populating
-            var existingRounds = await _context.Rounds.Where(r => r.TournamentId == tournament.TournamentId).ToListAsync();
-            if (existingRounds.Any())
-            {
-                var existingRaces = await _context.Races.Where(r => existingRounds.Select(er => er.RoundId).Contains(r.RoundId)).ToListAsync();
-                var existingRaceEntries = await _context.RaceEntries.Where(re => existingRaces.Select(er => er.RaceId).Contains(re.RaceId)).ToListAsync();
-                var existingAssignments = await _context.RaceRefereeAssignments.Where(ra => existingRaces.Select(er => er.RaceId).Contains(ra.RaceId)).ToListAsync();
-
-                _context.RaceRefereeAssignments.RemoveRange(existingAssignments);
-                _context.RaceEntries.RemoveRange(existingRaceEntries);
-                _context.Races.RemoveRange(existingRaces);
-                _context.Rounds.RemoveRange(existingRounds);
-                await _context.SaveChangesAsync();
-            }
-
-            if (allRegistrations.Count <= 12)
-            {
-                var round = new Round
-                {
-                    TournamentId = tournament.TournamentId,
-                    Name = "Final Round",
-                    RoundNumber = 1,
-                    StartDate = tournament.StartDate,
-                    EndDate = tournament.EndDate,
-                    Status = "Scheduled"
-                };
-                _context.Rounds.Add(round);
-                await _context.SaveChangesAsync();
-
-                var race = new Race
-                {
-                    RoundId = round.RoundId,
-                    Name = "FinalRace",
-                    RaceDate = tournament.StartDate ?? DateTime.UtcNow.AddDays(1),
-                    DistanceMeter = 1000,
-                    MaxLanes = 12,
-                    Status = "Scheduled"
-                };
-                _context.Races.Add(race);
-                await _context.SaveChangesAsync(); 
-
-                int lane = 1;
-                foreach (var reg in allRegistrations)
-                {
-                    var contract = allContracts.FirstOrDefault(c => c.HorseId == reg.HorseId);
-                    var profile = allProfiles.FirstOrDefault(p => p.UserId == contract?.JockeyId);
-
-                    var raceEntry = new RaceEntry
-                    {
-                        RaceId = race.RaceId,
-                        RegistrationId = reg.RegistrationId,
-                        JockeyId = profile?.JockeyId, // Nullable, safe fallback if user didn't assign a contract
-                        LaneNo = lane++,
-                        WinningProbability = 8.33m,
-                        CurrentOdds = 12.0m,
-                        Status = "Ready"
-                    };
-                    _context.RaceEntries.Add(raceEntry);
-                }
-            }
-            else
-            {
-                var round = new Round
-                {
-                    TournamentId = tournament.TournamentId,
-                    Name = "Prefinal Round",
-                    RoundNumber = 1,
-                    StartDate = tournament.StartDate,
-                    EndDate = tournament.EndDate,
-                    Status = "Scheduled"
-                };
-                _context.Rounds.Add(round);
-                await _context.SaveChangesAsync();
-
-                int totalHorses = allRegistrations.Count;
-                int raceCount = (int)Math.Ceiling(totalHorses / 12.0);
-                int baseHorsesPerRace = totalHorses / raceCount;
-                int remainder = totalHorses % raceCount;
-
-                int skip = 0;
-                for (int i = 0; i < raceCount; i++)
-                {
-                    int horsesInThisRace = baseHorsesPerRace + (i < remainder ? 1 : 0);
-                    var raceRegistrations = allRegistrations.Skip(skip).Take(horsesInThisRace).ToList();
-                    skip += horsesInThisRace;
-                    
-                    var race = new Race
-                    {
-                        RoundId = round.RoundId,
-                        Name = $"Prefinal Race {i + 1}",
-                        RaceDate = (tournament.StartDate ?? DateTime.UtcNow.AddDays(1)).AddHours(i),
-                        DistanceMeter = 1000,
-                        MaxLanes = 12,
-                        Status = "Scheduled"
-                    };
-                    _context.Races.Add(race);
-                    await _context.SaveChangesAsync();
-                    
-                    int lane = 1;
-                    foreach (var reg in raceRegistrations)
-                    {
-                        var contract = allContracts.FirstOrDefault(c => c.HorseId == reg.HorseId);
-                        var profile = allProfiles.FirstOrDefault(p => p.UserId == contract?.JockeyId);
-
-                        var raceEntry = new RaceEntry
-                        {
-                            RaceId = race.RaceId,
-                            RegistrationId = reg.RegistrationId,
-                            JockeyId = profile?.JockeyId,
-                            LaneNo = lane++,
-                            WinningProbability = 8.33m,
-                            CurrentOdds = 12.0m,
-                            Status = "Ready"
-                        };
-                        _context.RaceEntries.Add(raceEntry);
-                    }
-                }
-            }
-
-            tournament.Status = "Upcoming";
-
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
