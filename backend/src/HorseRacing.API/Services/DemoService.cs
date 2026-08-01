@@ -340,6 +340,21 @@ public class DemoService : IDemoService
             var allContracts = await _context.JockeyContracts.Where(c => c.TournamentId == tournament.TournamentId).ToListAsync();
             var allProfiles = await _context.JockeyProfiles.ToListAsync();
 
+            // Delete existing rounds and their races to avoid duplicates when re-populating
+            var existingRounds = await _context.Rounds.Where(r => r.TournamentId == tournament.TournamentId).ToListAsync();
+            if (existingRounds.Any())
+            {
+                var existingRaces = await _context.Races.Where(r => existingRounds.Select(er => er.RoundId).Contains(r.RoundId)).ToListAsync();
+                var existingRaceEntries = await _context.RaceEntries.Where(re => existingRaces.Select(er => er.RaceId).Contains(re.RaceId)).ToListAsync();
+                var existingAssignments = await _context.RaceRefereeAssignments.Where(ra => existingRaces.Select(er => er.RaceId).Contains(ra.RaceId)).ToListAsync();
+
+                _context.RaceRefereeAssignments.RemoveRange(existingAssignments);
+                _context.RaceEntries.RemoveRange(existingRaceEntries);
+                _context.Races.RemoveRange(existingRaces);
+                _context.Rounds.RemoveRange(existingRounds);
+                await _context.SaveChangesAsync();
+            }
+
             if (allRegistrations.Count <= 12)
             {
                 var round = new Round
@@ -399,10 +414,17 @@ public class DemoService : IDemoService
                 _context.Rounds.Add(round);
                 await _context.SaveChangesAsync();
 
-                int raceCount = (int)Math.Ceiling(allRegistrations.Count / 12.0);
+                int totalHorses = allRegistrations.Count;
+                int raceCount = (int)Math.Ceiling(totalHorses / 12.0);
+                int baseHorsesPerRace = totalHorses / raceCount;
+                int remainder = totalHorses % raceCount;
+
+                int skip = 0;
                 for (int i = 0; i < raceCount; i++)
                 {
-                    var raceRegistrations = allRegistrations.Skip(i * 12).Take(12).ToList();
+                    int horsesInThisRace = baseHorsesPerRace + (i < remainder ? 1 : 0);
+                    var raceRegistrations = allRegistrations.Skip(skip).Take(horsesInThisRace).ToList();
+                    skip += horsesInThisRace;
                     
                     var race = new Race
                     {
